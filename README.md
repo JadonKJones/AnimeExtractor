@@ -1,0 +1,49 @@
+# Anime to Anki (A2A)
+
+A Python-powered pipeline to transform anime transcripts into optimized, high-frequency Anki decks. While other tools exist, this project is built for the learner who values full control and offline portability.
+
+## Frequently Asked Questions
+
+### Q: Is this basically a local version of jpdb?
+
+**A:** Yes.
+
+### Q: Isn't jpdb way better?
+
+**A:** Yeah.
+
+### Q: What's the point then?
+
+**A:** I paid 25 dollars for AnkiMobile, and I am going to use Anki as much as humanly possible. Plus jpdb doesn't have a dedicated mobile app, and I need my studies to be available offline on my phone.
+
+As to why I want anime decks instead of using just a Core 5K list? Real life Japanese people don't speak textbook. If you're learning to pass a test that's one thing but if you're learning to learn then you're gonna have to consume japanese media. That's how you learn the best japanese. [Go read theory.](https://learnjapanese.moe/guide/#26-beginner-immersion-an-uphill-battle)
+![Mega_Aggregate_Pie.png](graphs/Mega_Aggregate_Pie.png)
+<sup><sub>You're gonna be talking about random stuff all the time. When's the last time you had a meaningful conversation about the weather?</sub></sup>
+
+### Q: How good are the decks?
+**A:** To be fair im not very good at japanese so I cannot vet the accuracy of the cards. I use jamdict and jisho so if its bad blame them not me.
+
+### Q: I downloaded some of your decks and now I have 12 ない cards 
+Given this is Anki and not jpdb obviously there's gonna be doubles from any core decks or just other decks you have in general. If you download more than one of these decks you're most defenitely going to have repeats. If you have a duplicate just delete them. Browse > Notes > Find Duplicates
+
+## Features
+
+* **Dual-Deck Generation:** Automatically creates both a Vocabulary deck and a Sentence deck.
+* **Proper Noun Handling:** Detects character names (like Mio or Yui) and provides the Romaji reading as the definition instead of a literal dictionary entry.
+* **Clean Formatting:** Includes modern sans-serif fonts and Furigana hover effects for better readability on mobile.
+
+## Setup
+
+1. Place your `.srt` transcripts in the `transcripts/[Show Name]/` folder.
+2. Ensure you have `JLPTWords.json` in the root directory for level tagging.
+3. Run the script to generate your `.apkg` files.
+4. Import the resulting `.apkg` into Anki.
+
+---
+
+### Alternative: Pre-built Decks
+
+If you just want the Anki files for the shows I have already processed, check out the GitHub Pages site at:
+`[Link that doesn't exist yet]`
+
+
