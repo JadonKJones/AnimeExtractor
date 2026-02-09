@@ -1,0 +1,14 @@
+{
+    "Anime": "Naruto",
+    "Length (total words)": 174534,
+    "Unique words (dictionary size)": 5515,
+    "Unique words (used once)": 0,
+    "Unique words (used once %)": "0.0%",
+    "Unique kanji": 1402,
+    "Unique kanji (used once)": 500,
+    "Unique kanji readings": 5515,
+    "Words not found in core Lists": 3995,
+    "Average Difficulty (Unweighted)": "47.7/100",
+    "Perceived Difficulty (Weighted)": "36.4/100",
+    "Peak difficulty (90th percentile)": "100/100"
+}

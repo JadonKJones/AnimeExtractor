@@ -1,0 +1,14 @@
+{
+    "Anime": "SK8",
+    "Length (total words)": 13308,
+    "Unique words (dictionary size)": 1318,
+    "Unique words (used once)": 0,
+    "Unique words (used once %)": "0.0%",
+    "Unique kanji": 550,
+    "Unique kanji (used once)": 333,
+    "Unique kanji readings": 1318,
+    "Words not found in core Lists": 707,
+    "Average Difficulty (Unweighted)": "39.1/100",
+    "Perceived Difficulty (Weighted)": "34.9/100",
+    "Peak difficulty (90th percentile)": "45/100"
+}

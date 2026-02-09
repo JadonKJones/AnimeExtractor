@@ -18,6 +18,7 @@ A Python-powered pipeline to transform anime transcripts into optimized, high-fr
 
 As to why I want anime decks instead of using just a Core 5K list? Real life Japanese people don't speak textbook. If you're learning to pass a test that's one thing but if you're learning to learn then you're gonna have to consume japanese media. That's how you learn the best japanese. [Go read theory.](https://learnjapanese.moe/guide/#26-beginner-immersion-an-uphill-battle)
 ![Mega_Aggregate_Pie.png](graphs/Mega_Aggregate_Pie.png)
+![Anime_vs_Core_Decks_Pie.png](graphs%2FAnime_vs_Core_Decks_Pie.png)
 <sup><sub>You're gonna be talking about random stuff all the time. When's the last time you had a meaningful conversation about the weather?</sub></sup>
 
 ### Q: How good are the decks?

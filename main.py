@@ -21,14 +21,49 @@ except ImportError:
 
     sys.modules['cgi'] = cgi
 
-# --- SETUP ---
-jam = Jamdict()
+# --- SETUP & DICTIONARY CHECK ---
+# This block ensures we have the dictionary data without re-downloading every time.
+try:
+    jam = Jamdict()
+    # Perform a test lookup to see if data exists
+    test_lookup = jam.lookup('たべる')
+    if not test_lookup.entries:
+        raise ValueError("Dictionary empty")
+    print("Local dictionary found.")
+except Exception:
+    print("Local dictionary missing or empty. Downloading KD2/JMdict data...")
+    from jamdict.data import JMDictXML
+
+    jam = Jamdict(data_url=JMDictXML.KD2_URL)  # Uses the smaller KD2 version by default for speed
+    jam.import_data()
+    print("Dictionary download complete.")
 
 translator = Translator()
-show = "WataMote"
 
-for show in os.listdir('Transcripts'):
+TRANSCRIPT_DIR = 'Transcripts'
+
+# Ensure directories exist
+os.makedirs('cache', exist_ok=True)
+os.makedirs('anki', exist_ok=True)
+os.makedirs('csv', exist_ok=True)
+
+if not os.path.exists(TRANSCRIPT_DIR):
+    print(f"Error: '{TRANSCRIPT_DIR}' directory not found.")
+    sys.exit(1)
+
+# Loop through shows in the Transcripts folder
+for show in os.listdir(TRANSCRIPT_DIR):
+    show_path = os.path.join(TRANSCRIPT_DIR, show)
+
+    # Skip if it's not a directory (e.g. .DS_Store or random files)
+    if not os.path.isdir(show_path):
+        continue
+
+    print(f"\nProcessing Show: {show}")
+
     t = Tokenizer()
+
+
     # Deterministic IDs based on show name
     def generate_id(name, salt=0):
         hash_obj = hashlib.sha256((name + str(salt)).encode())
@@ -232,8 +267,6 @@ for show in os.listdir('Transcripts'):
     }
 
     # --- ANKI TEMPLATES ---
-
-    # Common style for hover effect
     hover_css = """
     .expression { font-size: 50px; cursor: pointer; position: relative; display: inline-block; font-weight: bold; }
     .expression .reading-hover { visibility: hidden; font-size: 20px; color: #7f8c8d; position: absolute; width: 100%; top: -25px; left: 0; }
@@ -259,10 +292,10 @@ for show in os.listdir('Transcripts'):
     .level { display: inline-block; padding: 2px 8px; border-radius: 4px; background: #3498db; color: white; font-size: 12px; }
     """ + hover_css
 
-    fields = [{'name': 'Expression'}, {'name': 'Reading'}, {'name': 'Meaning'}, {'name': 'Level'}, {'name': 'Frequency'},
+    fields = [{'name': 'Expression'}, {'name': 'Reading'}, {'name': 'Meaning'}, {'name': 'Level'},
+              {'name': 'Frequency'},
               {'name': 'Sentence'}, {'name': 'Translation'}, {'name': 'Episodes'}]
 
-    # VOCAB CARD: Standard Front/Back
     vocab_model = genanki.Model(
         MODEL_ID_VOCAB,
         'Japanese Anime Vocab v8 (+1 Sorting)',
@@ -275,7 +308,6 @@ for show in os.listdir('Transcripts'):
         css=style_vocab
     )
 
-    # SENTENCE CARD: Front is Sentence, Back is Word (with Hover)
     sentence_model = genanki.Model(
         MODEL_ID_SENTENCE,
         'Japanese Anime Sentence v6 (+1 Sorting & Hover)',
@@ -305,7 +337,9 @@ for show in os.listdir('Transcripts'):
     word_reading_katakana = {}
 
     print(f"Scanning transcripts for: {show}")
-    for path in os.scandir(f"transcripts/{show}"):
+
+    # Updated to scan the specific subdirectory for the show
+    for path in os.scandir(show_path):
         if path.name.endswith('.srt'):
             ep_name = path.name.replace('.srt', '')
             try:
@@ -337,15 +371,16 @@ for show in os.listdir('Transcripts'):
                         word_reading_katakana[base] = token.reading
 
                     if base not in word_stats:
-                        word_stats[base] = {'raw': clean_text, 'bolded': '', 'score': -999, 'episodes': set(), 'tokens': []}
+                        word_stats[base] = {'raw': clean_text, 'bolded': '', 'score': -999, 'episodes': set(),
+                                            'tokens': []}
 
                     word_stats[base]['episodes'].add(ep_name)
 
                     if current_score > word_stats[base]['score']:
                         bolded = re.sub(f"({re.escape(token.surface)})", r"<b>\1</b>", clean_text, count=1)
-                        word_stats[base].update({'raw': clean_text, 'bolded': bolded, 'score': current_score, 'tokens': []})
+                        word_stats[base].update(
+                            {'raw': clean_text, 'bolded': bolded, 'score': current_score, 'tokens': []})
 
-                # Store best sentence tokens for complexity calc
                 for token_base in sentence_tokens:
                     if token_base in word_stats and word_stats[token_base]['raw'] == clean_text:
                         word_stats[token_base]['tokens'] = sentence_tokens
@@ -370,16 +405,13 @@ for show in os.listdir('Transcripts'):
     print("Generating Notes...")
 
     # --- DECK GENERATION LOGIC ---
-    # We split the lists here to sort them differently
     sorted_vocab = [w for w, c in counts.most_common() if c >= 2]
     known_words = set()
 
-    # Storage lists
     vocab_notes_list = []
-    sentence_notes_list = []  # Stores tuple: (complexity_score, note_object)
+    sentence_notes_list = []
 
     for word in sorted_vocab:
-        # 1. Definition Logic
         pos = word_pos.get(word, "")
         is_proper_noun = '固有名詞' in pos
 
@@ -411,7 +443,6 @@ for show in os.listdir('Transcripts'):
         ep_list = ", ".join(sorted(list(info['episodes'])))
         trans = translation_cache.get(info['raw'], "[Unavailable]")
 
-        # 2. Complexity Calculation (For Sentence Deck Sorting)
         sentence_tokens = info.get('tokens', [])
         unknown_count = 0
         for t in sentence_tokens:
@@ -419,31 +450,23 @@ for show in os.listdir('Transcripts'):
                 unknown_count += 1
 
         sentence_len = len(info['raw'])
-        # Score: Prefer fewer unknowns, then shorter sentences
-        # Heavily penalize unknowns (x100), lightly penalize length
         complexity_score = (unknown_count * 100) + sentence_len
 
         fields_data = [word, reading, meaning, str(level), str(counts[word]), info['bolded'], trans, ep_list]
 
-        # Add to Vocab List (Preserves Frequency Order)
         vocab_notes_list.append(genanki.Note(model=vocab_model, fields=fields_data))
-
-        # Add to Sentence List (Stored with score for sorting)
         sentence_notes_list.append((complexity_score, genanki.Note(model=sentence_model, fields=fields_data)))
 
         csv_data.append(fields_data)
         known_words.add(word)
 
     # --- FINAL DECK ADDITION ---
-
-    # 1. Vocab Deck: Add in original Frequency Order
     print(f"Adding {len(vocab_notes_list)} notes to Vocab Deck (Frequency Sorted)...")
     for note in vocab_notes_list:
         vocab_deck.add_note(note)
 
-    # 2. Sentence Deck: Sort by Simplicity, then Add
     print(f"Sorting and adding {len(sentence_notes_list)} notes to Sentence Deck (Simplicity Sorted)...")
-    sentence_notes_list.sort(key=lambda x: x[0])  # Sort by score (lowest first)
+    sentence_notes_list.sort(key=lambda x: x[0])
     for score, note in sentence_notes_list:
         sentence_deck.add_note(note)
 
@@ -452,7 +475,8 @@ for show in os.listdir('Transcripts'):
 
     with open(f'csv/{show}_Vocabulary_Full.csv', 'w', encoding='utf-8', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(['Expression', 'Reading', 'Meaning', 'Level', 'Frequency', 'Sentence', 'Translation', 'Episodes'])
+        writer.writerow(
+            ['Expression', 'Reading', 'Meaning', 'Level', 'Frequency', 'Sentence', 'Translation', 'Episodes'])
         writer.writerows(csv_data)
 
     print(f"Done! Created 'anki/{show}_Master.apkg'.")

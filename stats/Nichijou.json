@@ -1,0 +1,14 @@
+{
+    "Anime": "Nichijou",
+    "Length (total words)": 29137,
+    "Unique words (dictionary size)": 2200,
+    "Unique words (used once)": 0,
+    "Unique words (used once %)": "0.0%",
+    "Unique kanji": 779,
+    "Unique kanji (used once)": 428,
+    "Unique kanji readings": 2200,
+    "Words not found in core Lists": 1294,
+    "Average Difficulty (Unweighted)": "40.7/100",
+    "Perceived Difficulty (Weighted)": "30.8/100",
+    "Peak difficulty (90th percentile)": "70/100"
+}
