@@ -1,0 +1,18 @@
+{
+    "Anime": "Nichijou",
+    "Length_total_words": 28711,
+    "Unique_words_dictionary_size": 2180,
+    "Unique_words_used_once": 0,
+    "Unique_words_used_once_%": "0.0%",
+    "Unique_kanji": 779,
+    "Unique_kanji_used_once": 428,
+    "Unique_kanji_readings": 2180,
+    "Words_not_found_in_core_Lists": 1274,
+    "Average_Difficulty_Unweighted": 40,
+    "Perceived_Difficulty_Weighted": 30,
+    "Peak_difficulty_90th_percentile": 70,
+    "In_Core_1.5K": 731,
+    "In_Core_10K": 10,
+    "In_Core_2K": 165,
+    "Real_Life_Japanese": 1274
+}

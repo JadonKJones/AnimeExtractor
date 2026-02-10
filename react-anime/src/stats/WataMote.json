@@ -1,0 +1,18 @@
+{
+    "Anime": "WataMote",
+    "Length_total_words": 11691,
+    "Unique_words_dictionary_size": 1270,
+    "Unique_words_used_once": 0,
+    "Unique_words_used_once_%": "0.0%",
+    "Unique_kanji": 555,
+    "Unique_kanji_used_once": 326,
+    "Unique_kanji_readings": 1270,
+    "Words_not_found_in_core_Lists": 607,
+    "Average_Difficulty_Unweighted": 38,
+    "Perceived_Difficulty_Weighted": 29,
+    "Peak_difficulty_90th_percentile": 70,
+    "In_Core_1.5K": 556,
+    "In_Core_10K": 10,
+    "In_Core_2K": 97,
+    "Real_Life_Japanese": 607
+}

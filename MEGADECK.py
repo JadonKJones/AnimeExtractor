@@ -105,8 +105,8 @@ for word, count in total_counts.most_common():
     mega_deck.add_note(note)
 
 # --- EXPORT ---
-output_file = 'anki/Anime_Mega_Deck.apkg'
-if not os.path.exists('anki'): os.makedirs('anki')
+output_file = 'react-anime/public/anki/Anime_Mega_Deck.apkg'
+if not os.path.exists('react-anime/public/anki'): os.makedirs('react-anime/public/anki')
 
 print(f"Saving to {output_file}...")
 genanki.Package(mega_deck).write_to_file(output_file)

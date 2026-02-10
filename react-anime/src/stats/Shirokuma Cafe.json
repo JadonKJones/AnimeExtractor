@@ -1,0 +1,18 @@
+{
+    "Anime": "Shirokuma Cafe",
+    "Length_total_words": 57965,
+    "Unique_words_dictionary_size": 3300,
+    "Unique_words_used_once": 0,
+    "Unique_words_used_once_%": "0.0%",
+    "Unique_kanji": 1114,
+    "Unique_kanji_used_once": 552,
+    "Unique_kanji_readings": 3300,
+    "Words_not_found_in_core_Lists": 2023,
+    "Average_Difficulty_Unweighted": 43,
+    "Perceived_Difficulty_Weighted": 29,
+    "Peak_difficulty_90th_percentile": 70,
+    "In_Core_1.5K": 943,
+    "In_Core_10K": 22,
+    "In_Core_2K": 312,
+    "Real_Life_Japanese": 2023
+}

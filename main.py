@@ -13,7 +13,6 @@ from jamdict import Jamdict
 from googletrans import Translator
 import genanki
 
-# Polyfill for Python 3.13
 try:
     import cgi
 except ImportError:
@@ -21,15 +20,92 @@ except ImportError:
 
     sys.modules['cgi'] = cgi
 
-# --- SETUP ---
-jam = Jamdict()
+
+excluded_words = set()
+
+
+if os.path.exists('core lists/1.5K.json'):
+    with open('core lists/1.5K.json', 'r', encoding='utf8') as f:
+        file_data = json.load(f)
+        for entry in file_data:
+            if isinstance(entry, dict) and 'word' in entry:
+                excluded_words.add(entry['word'])
+            elif isinstance(entry, str):
+                excluded_words.add(entry)
+    print(f"Loaded exclusion list. Total excluded words: {len(excluded_words)}")
+else:
+    print("No exclusion list found at 'core lists/1.5K.json'. Proceeding without exclusions.")
+
+
+NAME_FILE = 'names.json'
+DEFAULT_NAMES = {
+    "遊戯": "Yugi", "城之内": "Jonouchi", "海馬": "Kaiba", "本田": "Honda", "杏子": "Anzu",
+    "モクバ": "Mokuba", "ペガサス": "Pegasus", "獏良": "Bakura", "マリク": "Marik",
+    "サトシ": "Satoshi (Ash)", "カスミ": "Kasumi (Misty)", "タケシ": "Takeshi (Brock)",
+    "ピカチュウ": "Pikachu", "ムサシ": "Musashi (Jessie)", "コジロウ": "Kojiro (James)", "ニャース": "Nyarth (Meowth)",
+    "ナルト": "Naruto", "サスケ": "Sasuke", "サクラ": "Sakura", "カカシ": "Kakashi",
+    "ヒナタ": "Hinata", "シカマル": "Shikamaru", "イノ": "Ino", "チョウジ": "Choji",
+    "ゆっこ": "Yukko", "みお": "Mio", "麻衣": "Mai", "はかせ": "Hakase", "なの": "Nano", "阪本": "Sakamoto",
+    "唯": "Yui", "澪": "Mio", "律": "Ritsu", "紬": "Tsumugi", "梓": "Azusa", "憂": "Ui", "和": "Nodoka",
+    "こなた": "Konata", "かがみ": "Kagami", "つかさ": "Tsukasa", "みゆき": "Miyuki",
+    "レゴシ": "Legoshi", "ハル": "Haru", "ルイ": "Louis", "ジュノ": "Juno", "ジャック": "Jack",
+    "千代": "Chiyo", "大阪": "Osaka", "智": "Tomo", "暦": "Yomi", "榊": "Sakaki", "神楽": "Kagura",
+    "ランガ": "Langa", "レキ": "Reki", "ジョー": "Joe", "チェリー": "Cherry", "愛抱夢": "Adam"
+}
+
+if not os.path.exists(NAME_FILE):
+    print(f"Creating default {NAME_FILE} with character names...")
+    with open(NAME_FILE, 'w', encoding='utf8') as f:
+        json.dump(DEFAULT_NAMES, f, ensure_ascii=False, indent=4)
+
+
+def load_names():
+    if os.path.exists(NAME_FILE):
+        with open(NAME_FILE, 'r', encoding='utf8') as f:
+            return json.load(f)
+    return DEFAULT_NAMES
+
+
+name_map = load_names()
+
+try:
+    jam = Jamdict()
+    test_lookup = jam.lookup('たべる')
+    if not test_lookup.entries:
+        raise ValueError("Dictionary empty")
+    print("Local dictionary found.")
+except Exception:
+    print("Local dictionary missing or empty. Downloading KD2/JMdict data...")
+    from jamdict.data import JMDictXML
+
+    jam = Jamdict(data_url=JMDictXML.KD2_URL)
+    jam.import_data()
+    print("Dictionary download complete.")
 
 translator = Translator()
-show = "WataMote"
 
-for show in os.listdir('Transcripts'):
+TRANSCRIPT_DIR = 'Transcripts'
+
+os.makedirs('cache', exist_ok=True)
+os.makedirs('react-anime/public/anki', exist_ok=True)
+os.makedirs('react-anime/public/csv', exist_ok=True)
+
+if not os.path.exists(TRANSCRIPT_DIR):
+    print(f"Error: '{TRANSCRIPT_DIR}' directory not found.")
+    sys.exit(1)
+
+
+for show in os.listdir(TRANSCRIPT_DIR):
+    show_path = os.path.join(TRANSCRIPT_DIR, show)
+
+    if not os.path.isdir(show_path):
+        continue
+
+    print(f"\nProcessing Show: {show}")
+
     t = Tokenizer()
-    # Deterministic IDs based on show name
+
+
     def generate_id(name, salt=0):
         hash_obj = hashlib.sha256((name + str(salt)).encode())
         return int(hash_obj.hexdigest(), 16) % 10 ** 10
@@ -55,7 +131,6 @@ for show in os.listdir('Transcripts'):
             json.dump(cache_data, f, ensure_ascii=False, indent=4)
 
 
-    # --- ROMAJI CONVERTER ---
     def kana_to_romaji(text):
         consonants = {
             'カ': 'ka', 'キ': 'ki', 'ク': 'ku', 'ケ': 'ke', 'コ': 'ko',
@@ -96,11 +171,13 @@ for show in os.listdir('Transcripts'):
         return res.capitalize()
 
 
-    # --- UTILS ---
     def is_garbage_token(base_word):
-        if re.match(r'^[a-zA-Z0-9]+$', base_word): return True
-        if re.match(r'^[。、？！!?.…\s　～〜\-―♪★「」『』]+$', base_word): return True
-        if len(base_word) == 1 and re.match(r'[\u3040-\u309f]', base_word): return True
+        if not re.match(r'^[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf\u3005\u30fc]+$', base_word):
+            return True
+
+        if len(base_word) == 1 and re.match(r'[\u3040-\u309f]', base_word):
+            return True
+
         return False
 
 
@@ -135,6 +212,24 @@ for show in os.listdir('Transcripts'):
             except:
                 time.sleep((i + 1) * 2)
         return "[Unavailable]"
+
+
+    def get_definition(word):
+        local_result = check_local_dict(word)
+        if local_result:
+            return local_result
+        return get_online_definition(word)
+
+
+    def check_local_dict(word, filename='dict.csv'):
+        if not os.path.exists(filename):
+            return None
+        with open(filename, 'r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                if row and row[0].strip() == word:
+                    return row[1].strip(), row[2].strip(), row[3].strip()
+        return None
 
 
     def get_online_definition(word):
@@ -231,9 +326,7 @@ for show in os.listdir('Transcripts'):
         'なら': 'If (contextual)...'
     }
 
-    # --- ANKI TEMPLATES ---
 
-    # Common style for hover effect
     hover_css = """
     .expression { font-size: 50px; cursor: pointer; position: relative; display: inline-block; font-weight: bold; }
     .expression .reading-hover { visibility: hidden; font-size: 20px; color: #7f8c8d; position: absolute; width: 100%; top: -25px; left: 0; }
@@ -259,10 +352,10 @@ for show in os.listdir('Transcripts'):
     .level { display: inline-block; padding: 2px 8px; border-radius: 4px; background: #3498db; color: white; font-size: 12px; }
     """ + hover_css
 
-    fields = [{'name': 'Expression'}, {'name': 'Reading'}, {'name': 'Meaning'}, {'name': 'Level'}, {'name': 'Frequency'},
+    fields = [{'name': 'Expression'}, {'name': 'Reading'}, {'name': 'Meaning'}, {'name': 'Level'},
+              {'name': 'Frequency'},
               {'name': 'Sentence'}, {'name': 'Translation'}, {'name': 'Episodes'}]
 
-    # VOCAB CARD: Standard Front/Back
     vocab_model = genanki.Model(
         MODEL_ID_VOCAB,
         'Japanese Anime Vocab v8 (+1 Sorting)',
@@ -275,7 +368,6 @@ for show in os.listdir('Transcripts'):
         css=style_vocab
     )
 
-    # SENTENCE CARD: Front is Sentence, Back is Word (with Hover)
     sentence_model = genanki.Model(
         MODEL_ID_SENTENCE,
         'Japanese Anime Sentence v6 (+1 Sorting & Hover)',
@@ -291,7 +383,6 @@ for show in os.listdir('Transcripts'):
     vocab_deck = genanki.Deck(DECK_ID_VOCAB, f'Anime Vocabulary:: {show}')
     sentence_deck = genanki.Deck(DECK_ID_SENTENCE, f'Anime Sentences:: {show}')
 
-    # --- DATA PROCESSING ---
     try:
         with open('JLPTWords.json', 'r', encoding='utf8') as file:
             jlpt_data = json.load(file)
@@ -305,22 +396,44 @@ for show in os.listdir('Transcripts'):
     word_reading_katakana = {}
 
     print(f"Scanning transcripts for: {show}")
-    for path in os.scandir(f"transcripts/{show}"):
-        if path.name.endswith('.srt'):
-            ep_name = path.name.replace('.srt', '')
+
+    for path in os.scandir(show_path):
+        is_srt = path.name.endswith('.srt')
+        is_ass = path.name.endswith('.ass')
+
+        if is_srt or is_ass:
+            ep_name = path.name.replace('.srt', '').replace('.ass', '')
             try:
                 with open(path, 'r', encoding='utf8') as file:
                     lines = file.read().split('\n')
             except:
                 continue
 
-            for text in lines:
-                text = text.strip()
-                if '♪' in text: continue
-                clean_text = re.sub(r'\{.*?\}', '', text)
-                clean_text = re.sub(r'[（\(].*?[）\)]', '', clean_text).strip()
-                if not clean_text or "-->" in clean_text or clean_text.isdigit(): continue
+            parsed_lines = []
 
+            if is_srt:
+                for text in lines:
+                    text = text.strip()
+                    if '♪' in text: continue
+                    clean_text = re.sub(r'\{.*?\}', '', text)
+                    clean_text = re.sub(r'[（\(].*?[）\)]', '', clean_text).strip()
+                    if not clean_text or "-->" in clean_text or clean_text.isdigit(): continue
+                    parsed_lines.append(clean_text)
+
+            elif is_ass:
+                for text in lines:
+                    if text.startswith('Dialogue:'):
+                        parts = text.split(',', 9)
+                        if len(parts) > 9:
+                            content = parts[9].strip()
+                            if '♪' in content: continue
+                            clean_text = re.sub(r'\{.*?\}', '', content)
+                            clean_text = clean_text.replace(r'\N', ' ').replace(r'\n', ' ').replace(r'\h', ' ')
+                            clean_text = re.sub(r'[（\(].*?[）\)]', '', clean_text).strip()
+                            if clean_text:
+                                parsed_lines.append(clean_text)
+
+            for clean_text in parsed_lines:
                 current_score = score_sentence(clean_text)
                 if current_score <= 0: continue
 
@@ -337,15 +450,16 @@ for show in os.listdir('Transcripts'):
                         word_reading_katakana[base] = token.reading
 
                     if base not in word_stats:
-                        word_stats[base] = {'raw': clean_text, 'bolded': '', 'score': -999, 'episodes': set(), 'tokens': []}
+                        word_stats[base] = {'raw': clean_text, 'bolded': '', 'score': -999, 'episodes': set(),
+                                            'tokens': []}
 
                     word_stats[base]['episodes'].add(ep_name)
 
                     if current_score > word_stats[base]['score']:
                         bolded = re.sub(f"({re.escape(token.surface)})", r"<b>\1</b>", clean_text, count=1)
-                        word_stats[base].update({'raw': clean_text, 'bolded': bolded, 'score': current_score, 'tokens': []})
+                        word_stats[base].update(
+                            {'raw': clean_text, 'bolded': bolded, 'score': current_score, 'tokens': []})
 
-                # Store best sentence tokens for complexity calc
                 for token_base in sentence_tokens:
                     if token_base in word_stats and word_stats[token_base]['raw'] == clean_text:
                         word_stats[token_base]['tokens'] = sentence_tokens
@@ -353,7 +467,6 @@ for show in os.listdir('Transcripts'):
     counts = Counter(all_words)
     csv_data = []
 
-    # --- BULK TRANSLATION ---
     print("Identifying sentences for bulk translation...")
     sentences_to_translate = []
     for word, info in word_stats.items():
@@ -369,31 +482,37 @@ for show in os.listdir('Transcripts'):
 
     print("Generating Notes...")
 
-    # --- DECK GENERATION LOGIC ---
-    # We split the lists here to sort them differently
     sorted_vocab = [w for w, c in counts.most_common() if c >= 2]
     known_words = set()
 
-    # Storage lists
     vocab_notes_list = []
-    sentence_notes_list = []  # Stores tuple: (complexity_score, note_object)
+    sentence_notes_list = []
 
     for word in sorted_vocab:
-        # 1. Definition Logic
         pos = word_pos.get(word, "")
         is_proper_noun = '固有名詞' in pos
 
-        if word in GRAMMAR_OVERRIDES:
+
+        if word in name_map:
+            meaning = name_map[word]
+            reading = word
+            source = "NameMap"
+            if word in word_reading_katakana:
+                reading = word_reading_katakana[word]
+
+        elif word in GRAMMAR_OVERRIDES:
             meaning = GRAMMAR_OVERRIDES[word]
             reading = word
             source = "Grammar"
-        elif is_proper_noun:
-            kana = word_reading_katakana.get(word, word)
-            romaji = kana_to_romaji(kana)
-            meaning = romaji if romaji else "[Proper Noun]"
-            reading = word
-            source = "ProperNoun"
+
         else:
+            if is_proper_noun:
+                kana = word_reading_katakana.get(word, word)
+                romaji = kana_to_romaji(kana)
+                meaning = romaji if romaji else "[Proper Noun]"
+                reading = word
+                source = "ProperNoun"
+
             result = jam.lookup(word)
             if result.entries:
                 entry = result.entries[0]
@@ -402,7 +521,10 @@ for show in os.listdir('Transcripts'):
                     [f"{j + 1}. {', '.join([g.text for g in s.gloss])}" for j, s in enumerate(entry.senses)])
                 source = "Jamdict"
             else:
-                meaning, reading, source = get_online_definition(word)
+                meaning, reading, source = get_definition(word)
+                with open('dict.csv', 'a', encoding='utf-8', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerow([word, meaning, reading, source])
 
         level = jlpt_data.get(word, "Unlabeled")
         if word == "さん": level = "N5"
@@ -411,7 +533,6 @@ for show in os.listdir('Transcripts'):
         ep_list = ", ".join(sorted(list(info['episodes'])))
         trans = translation_cache.get(info['raw'], "[Unavailable]")
 
-        # 2. Complexity Calculation (For Sentence Deck Sorting)
         sentence_tokens = info.get('tokens', [])
         unknown_count = 0
         for t in sentence_tokens:
@@ -419,40 +540,34 @@ for show in os.listdir('Transcripts'):
                 unknown_count += 1
 
         sentence_len = len(info['raw'])
-        # Score: Prefer fewer unknowns, then shorter sentences
-        # Heavily penalize unknowns (x100), lightly penalize length
         complexity_score = (unknown_count * 100) + sentence_len
 
         fields_data = [word, reading, meaning, str(level), str(counts[word]), info['bolded'], trans, ep_list]
-
-        # Add to Vocab List (Preserves Frequency Order)
-        vocab_notes_list.append(genanki.Note(model=vocab_model, fields=fields_data))
-
-        # Add to Sentence List (Stored with score for sorting)
-        sentence_notes_list.append((complexity_score, genanki.Note(model=sentence_model, fields=fields_data)))
-
         csv_data.append(fields_data)
+
+        if word not in excluded_words:
+            vocab_notes_list.append(genanki.Note(model=vocab_model, fields=fields_data))
+            sentence_notes_list.append((complexity_score, genanki.Note(model=sentence_model, fields=fields_data)))
+
         known_words.add(word)
 
-    # --- FINAL DECK ADDITION ---
 
-    # 1. Vocab Deck: Add in original Frequency Order
     print(f"Adding {len(vocab_notes_list)} notes to Vocab Deck (Frequency Sorted)...")
     for note in vocab_notes_list:
         vocab_deck.add_note(note)
 
-    # 2. Sentence Deck: Sort by Simplicity, then Add
     print(f"Sorting and adding {len(sentence_notes_list)} notes to Sentence Deck (Simplicity Sorted)...")
-    sentence_notes_list.sort(key=lambda x: x[0])  # Sort by score (lowest first)
+    sentence_notes_list.sort(key=lambda x: x[0])
     for score, note in sentence_notes_list:
         sentence_deck.add_note(note)
 
     print("Creating APKG package...")
-    genanki.Package([vocab_deck, sentence_deck]).write_to_file(f'anki/{show}_Master.apkg')
+    genanki.Package([vocab_deck, sentence_deck]).write_to_file(f'react-anime/public/anki/{show}_Master.apkg')
 
-    with open(f'csv/{show}_Vocabulary_Full.csv', 'w', encoding='utf-8', newline='') as f:
+    with open(f'react-anime/public/csv/{show}_Vocabulary_Full.csv', 'w', encoding='utf-8', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(['Expression', 'Reading', 'Meaning', 'Level', 'Frequency', 'Sentence', 'Translation', 'Episodes'])
+        writer.writerow(
+            ['Expression', 'Reading', 'Meaning', 'Level', 'Frequency', 'Sentence', 'Translation', 'Episodes'])
         writer.writerows(csv_data)
 
-    print(f"Done! Created 'anki/{show}_Master.apkg'.")
+    print(f"Done! Created 'anki/{show}_Master.apkg' and 'csv/{show}_Vocabulary_Full.csv' (CSV contains full list).")

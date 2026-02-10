@@ -1,0 +1,18 @@
+{
+    "Anime": "Baku Tech! Bakugan",
+    "Length_total_words": 26368,
+    "Unique_words_dictionary_size": 2188,
+    "Unique_words_used_once": 0,
+    "Unique_words_used_once_%": "0.0%",
+    "Unique_kanji": 753,
+    "Unique_kanji_used_once": 383,
+    "Unique_kanji_readings": 2188,
+    "Words_not_found_in_core_Lists": 1313,
+    "Average_Difficulty_Unweighted": 42,
+    "Perceived_Difficulty_Weighted": 35,
+    "Peak_difficulty_90th_percentile": 70,
+    "In_Core_1.5K": 737,
+    "In_Core_10K": 11,
+    "In_Core_2K": 127,
+    "Real_Life_Japanese": 1313
+}

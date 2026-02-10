@@ -1,0 +1,18 @@
+{
+    "Anime": "Naruto",
+    "Length_total_words": 142055,
+    "Unique_words_dictionary_size": 5407,
+    "Unique_words_used_once": 0,
+    "Unique_words_used_once_%": "0.0%",
+    "Unique_kanji": 1402,
+    "Unique_kanji_used_once": 500,
+    "Unique_kanji_readings": 5407,
+    "Words_not_found_in_core_Lists": 3887,
+    "Average_Difficulty_Unweighted": 47,
+    "Perceived_Difficulty_Weighted": 34,
+    "Peak_difficulty_90th_percentile": 100,
+    "In_Core_1.5K": 1228,
+    "In_Core_10K": 19,
+    "In_Core_2K": 273,
+    "Real_Life_Japanese": 3887
+}

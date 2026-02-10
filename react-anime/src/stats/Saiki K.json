@@ -1,0 +1,18 @@
+{
+    "Anime": "Saiki K",
+    "Length_total_words": 58504,
+    "Unique_words_dictionary_size": 4051,
+    "Unique_words_used_once": 0,
+    "Unique_words_used_once_%": "0.0%",
+    "Unique_kanji": 1205,
+    "Unique_kanji_used_once": 495,
+    "Unique_kanji_readings": 4051,
+    "Words_not_found_in_core_Lists": 2581,
+    "Average_Difficulty_Unweighted": 44,
+    "Perceived_Difficulty_Weighted": 32,
+    "Peak_difficulty_90th_percentile": 70,
+    "In_Core_1.5K": 1130,
+    "In_Core_10K": 15,
+    "In_Core_2K": 325,
+    "Real_Life_Japanese": 2581
+}
