@@ -56,6 +56,7 @@ function App() {
                   <h1>{selectedAnime.Anime}</h1>
                   <p><strong>Length:</strong> {selectedAnime.Length_total_words.toLocaleString()}</p>
                   <p><strong>Unique Words:</strong> {selectedAnime.Unique_words_dictionary_size.toLocaleString()}</p>
+                  <p><strong>No-List Words:</strong> {selectedAnime.Real_Life_Japanese.toLocaleString()}</p>
                   <p><strong>Unique Kanji:</strong> {selectedAnime.Unique_kanji}</p>
                   <p><strong>Average Difficulty:</strong> {selectedAnime.Perceived_Difficulty_Weighted}</p>
                   
