@@ -44,7 +44,7 @@ Given this is Anki and not jpdb obviously there's gonna be doubles from any core
 
 ## Setup
 
-1. Place your `.srt` transcripts in the `transcripts/[Show Name]/` folder.
+1. Create a `Transcript` folder and place your `.srt` transcripts in the `Transcripts/[Show Name]/` folder.
 2. Ensure you have `JLPTWords.json` in the root directory for level tagging.
 3. Run the script to generate your `.apkg` files fount at `react-anime/public/anki`.
 4. Import the resulting `.apkg` into Anki.

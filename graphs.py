@@ -9,8 +9,8 @@ from collections import Counter
 # --- THE FIX FOR JAPANESE CHARACTERS ---
 plt.rcParams['font.family'] = 'MS Gothic'
 
-show = "WataMote"
-csv_file = f"csv/{show}_Vocabulary_Full.csv"
+show = "K-ON! Movie"
+csv_file = f"react-anime/public/csv/{show}_Vocabulary_Full.csv"
 core_folder = "core lists/"  # Path to your .json files
 
 if not os.path.exists(csv_file):
@@ -115,7 +115,7 @@ level_counts = df['Refined_Level'].value_counts()
 plt.figure(figsize=(10, 6))
 sns.barplot(x=level_counts.index, y=level_counts.values, hue=level_counts.index, palette="viridis", legend=False)
 plt.title(f"JLPT Level Distribution (Unique Vocab): {show}")
-plt.savefig(f"graphs/{show}_level_dist_bar.png")
+plt.savefig(f"react-anime/public/graphs/{show}_level_dist_bar.png")
 
 # 2. Episode Difficulty (Stacked Bar)
 if 'Episodes' in df.columns:
@@ -127,7 +127,7 @@ if 'Episodes' in df.columns:
     ep_vocab.plot(kind='bar', stacked=True, ax=ax, colormap='viridis')
     plt.title(f"New Vocab Introduced per Episode: {show}")
     plt.tight_layout()
-    plt.savefig(f"graphs/{show}_ep_difficulty.png")
+    plt.savefig(f"react-anime/public/graphs/{show}_ep_difficulty.png")
 
 # 3. Core Deck Coverage (Pie)
 plt.figure(figsize=(9, 9))
@@ -137,7 +137,7 @@ colors_core = ['#2ca02c', '#bcbd22', '#1f77b4', '#d62728']  # Green, Yellow, Blu
 plt.pie(sizes_core, labels=labels_core, autopct='%1.1f%%', startangle=140, colors=colors_core,
         wedgeprops={'edgecolor': 'white'})
 plt.title(f"Core Deck Coverage vs Anime Only: {show}")
-plt.savefig(f"graphs/{show}_core_coverage_pie.png")
+plt.savefig(f"react-anime/public/graphs/{show}_core_coverage_pie.png")
 
 print(f"\nExecution complete for {show}.")
 print(f"Anime Only words found: {core_stats['Anime Only']}")

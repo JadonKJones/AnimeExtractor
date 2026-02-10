@@ -8,9 +8,10 @@ import random
 import hashlib
 import requests
 from collections import Counter
-from janome.tokenizer import Tokenizer
+from sudachipy import tokenizer as sudachi_tokenizer
+from sudachipy import dictionary as sudachi_dictionary
 from jamdict import Jamdict
-from googletrans import Translator
+from deep_translator import GoogleTranslator
 import genanki
 
 try:
@@ -20,10 +21,9 @@ except ImportError:
 
     sys.modules['cgi'] = cgi
 
+# --- SETUP START ---
 
 excluded_words = set()
-
-
 if os.path.exists('core lists/1.5K.json'):
     with open('core lists/1.5K.json', 'r', encoding='utf8') as f:
         file_data = json.load(f)
@@ -35,7 +35,6 @@ if os.path.exists('core lists/1.5K.json'):
     print(f"Loaded exclusion list. Total excluded words: {len(excluded_words)}")
 else:
     print("No exclusion list found at 'core lists/1.5K.json'. Proceeding without exclusions.")
-
 
 NAME_FILE = 'names.json'
 DEFAULT_NAMES = {
@@ -50,7 +49,8 @@ DEFAULT_NAMES = {
     "こなた": "Konata", "かがみ": "Kagami", "つかさ": "Tsukasa", "みゆき": "Miyuki",
     "レゴシ": "Legoshi", "ハル": "Haru", "ルイ": "Louis", "ジュノ": "Juno", "ジャック": "Jack",
     "千代": "Chiyo", "大阪": "Osaka", "智": "Tomo", "暦": "Yomi", "榊": "Sakaki", "神楽": "Kagura",
-    "ランガ": "Langa", "レキ": "Reki", "ジョー": "Joe", "チェリー": "Cherry", "愛抱夢": "Adam"
+    "ランガ": "Langa", "レキ": "Reki", "ジョー": "Joe", "チェリー": "Cherry", "愛抱夢": "Adam",
+    "あず": "Azu (Azusa)"
 }
 
 if not os.path.exists(NAME_FILE):
@@ -68,22 +68,21 @@ def load_names():
 
 name_map = load_names()
 
+# --- JAMDICT INITIALIZATION ---
+print("Initializing dictionary...")
 try:
     jam = Jamdict()
     test_lookup = jam.lookup('たべる')
-    if not test_lookup.entries:
-        raise ValueError("Dictionary empty")
-    print("Local dictionary found.")
-except Exception:
-    print("Local dictionary missing or empty. Downloading KD2/JMdict data...")
-    from jamdict.data import JMDictXML
+    print("Dictionary loaded successfully.")
+except Exception as e:
+    print("\n[ERROR] Could not load the Jamdict dictionary.")
+    print(f"Error Details: {e}")
+    print("\nPLEASE RUN THIS COMMAND IN YOUR TERMINAL TO INSTALL THE DICTIONARY:")
+    print("    python -m pip install jamdict-data")
+    sys.exit(1)
 
-    jam = Jamdict(data_url=JMDictXML.KD2_URL)
-    jam.import_data()
-    print("Dictionary download complete.")
-
-translator = Translator()
-
+# Initialize Translator
+translator = GoogleTranslator(source='ja', target='en')
 TRANSCRIPT_DIR = 'Transcripts'
 
 os.makedirs('cache', exist_ok=True)
@@ -94,6 +93,10 @@ if not os.path.exists(TRANSCRIPT_DIR):
     print(f"Error: '{TRANSCRIPT_DIR}' directory not found.")
     sys.exit(1)
 
+# Initialize Sudachi Tokenizer
+print("Initializing Sudachi tokenizer...")
+sudachi_obj = sudachi_dictionary.Dictionary().create()
+sudachi_mode = sudachi_tokenizer.Tokenizer.SplitMode.C
 
 for show in os.listdir(TRANSCRIPT_DIR):
     show_path = os.path.join(TRANSCRIPT_DIR, show)
@@ -102,8 +105,6 @@ for show in os.listdir(TRANSCRIPT_DIR):
         continue
 
     print(f"\nProcessing Show: {show}")
-
-    t = Tokenizer()
 
 
     def generate_id(name, salt=0):
@@ -174,10 +175,8 @@ for show in os.listdir(TRANSCRIPT_DIR):
     def is_garbage_token(base_word):
         if not re.match(r'^[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf\u3005\u30fc]+$', base_word):
             return True
-
         if len(base_word) == 1 and re.match(r'[\u3040-\u309f]', base_word):
             return True
-
         return False
 
 
@@ -189,13 +188,13 @@ for show in os.listdir(TRANSCRIPT_DIR):
             batch = sentences[i:i + batch_size]
             print(f"  > Batch translating {i + 1}-{min(i + batch_size, total)} of {total}...")
             try:
-                results = translator.translate(batch, src='ja', dest='en')
+                results = translator.translate_batch(batch)
                 if isinstance(results, list):
                     for original, res in zip(batch, results):
-                        translated_dict[original] = res.text
+                        translated_dict[original] = res
                 else:
-                    translated_dict[batch[0]] = results.text
-                time.sleep(1.5)
+                    translated_dict[batch[0]] = results
+                time.sleep(1.0)
             except Exception as e:
                 print(f"  > Batch failed: {e}. Retrying individually...")
                 for s in batch:
@@ -207,18 +206,33 @@ for show in os.listdir(TRANSCRIPT_DIR):
         for i in range(retries):
             try:
                 time.sleep(random.uniform(1.0, 2.0))
-                result = translator.translate(text, src='ja', dest='en')
-                if result and result.text: return result.text
+                result = translator.translate(text)
+                if result: return result
             except:
                 time.sleep((i + 1) * 2)
         return "[Unavailable]"
 
 
-    def get_definition(word):
+    def get_definition(word, normalized_word):
+        # 1. Try Local Dict
         local_result = check_local_dict(word)
         if local_result:
             return local_result
-        return get_online_definition(word)
+
+        # 2. Try Jamdict with Normalized Form
+        search_term = normalized_word if normalized_word else word
+        result = jam.lookup(search_term)
+
+        if result.entries:
+            # Simple fallback: just grab the first valid entry
+            best_entry = result.entries[0]
+            reading = best_entry.kana_forms[0].text if best_entry.kana_forms else search_term
+            meaning = "<br>".join(
+                [f"{j + 1}. {', '.join([g.text for g in s.gloss])}" for j, s in enumerate(best_entry.senses)])
+            return meaning, reading, "Jamdict"
+
+        # 3. Fallback to Jisho API
+        return get_online_definition(search_term)
 
 
     def check_local_dict(word, filename='dict.csv'):
@@ -233,7 +247,7 @@ for show in os.listdir(TRANSCRIPT_DIR):
 
 
     def get_online_definition(word):
-        print(f"  > Local dict failed for '{word}'. Trying Jisho API...")
+        print(f"  > Dictionary failed for '{word}'. Trying Jisho API...")
         try:
             url = f"https://jisho.org/api/v1/search/words?keyword={word}"
             response = requests.get(url, timeout=10)
@@ -265,67 +279,63 @@ for show in os.listdir(TRANSCRIPT_DIR):
         return score
 
 
-    GRAMMAR_OVERRIDES = {
-        'ない': 'Not / There is not (Negative auxiliary)',
-        'いる': 'To be (animate) / -ing marker',
-        'ある': 'To be (inanimate)',
-        'なる': 'To become',
-        'くる': 'To come',
-        'やる': 'To do',
-        'いい': 'Good',
-        'よい': 'Good',
-        'すごい': 'Amazing',
-        'だ': 'Be (Copula)',
-        'です': 'Be (Polite Copula)',
-        'ます': 'Polite verb suffix',
-        'た': 'Past tense marker',
-        'て': 'Conjunctive particle (-te form)',
-        'ん': 'Explanation / Emphasis marker',
-        'の': 'Possessive / Nominalizer',
-        'に': 'Target / Direction particle',
-        'へ': 'Direction particle',
-        'と': 'And / With / Quote marker',
+    # --- THE GRAMMAR DICTIONARY ---
+    # This list intercepts the dictionary lookup for common structure words.
+    GRAMMAR_DICT = {
+        'ない': 'Not (Negative / Nonexistent)',
+        'する': 'To do / To make',
+        'てる': 'is... -ing (Contraction of te-iru)',
+        'で': 'At / By / With (Particle)',
+        'に': 'To / At (Target Particle)',
+        'を': 'Object Marker',
+        'は': 'Topic Marker (As for...)',
+        'が': 'Subject Marker',
+        'の': 'Possessive / Nominalizer (of / \'s)',
+        'と': 'And / With / Quotation',
         'も': 'Also / Too',
-        'が': 'Subject marker',
-        'は': 'Topic marker',
-        'を': 'Object marker',
+        'へ': 'To (Direction Particle)',
         'から': 'From / Because',
         'けど': 'But / Although',
-        'しかし': 'However',
-        'こと': 'Thing (intangible) / Nominalizer',
-        'もの': 'Thing (tangible)',
-        'わけ': 'Reason / Conclusion',
-        'ほう': 'Direction / Side',
-        'よう': 'Way / Like / As if',
-        'くらい': 'About / Approximately',
-        'ばかり': 'Just / Only',
-        'だけ': 'Only',
-        'ため': 'Sake / Purpose',
-        'まま': 'As is / Condition',
-        'ところ': 'Place / Moment',
-        'うえ': 'Above / Upon',
-        'うち': 'Inside / While',
-        'あげる': 'To give',
-        'くれる': 'To give (to me)',
-        'もらう': 'To receive',
-        'おく': 'To place / Do in advance',
-        'しまう': 'To finish / Do completely',
-        'みる': 'To try doing',
+        'し': 'And / Besides',
+        'です': 'To be (Polite Copula)',
+        'ます': 'Polite Sentence Ending (Verb Suffix)',
+        'だ': 'To be (Plain Copula)',
+        'って': 'Topic Marker / Quotation ("You said..")',
+        'て': 'Conjunctive Particle (And then...)',
+        'た': 'Past Tense Marker',
+        'ね': 'Right? (Sentence Ending)',
+        'よ': 'Emphasis (Sentence Ending)',
+        'な': 'Don\'t / Right? (Sentence Ending)',
+        'ん': 'Explanation / Emphasis',
         'う': 'Volitional (Let\'s...)',
-        'ね': 'Right? (Sentence ending)',
-        'よ': 'Emphasis (Sentence ending)',
-        'な': 'Don\'t / Right? (Sentence ending)',
+        'よう': 'Seem / Like / Way',
+        'こと': 'Thing (Intangible) / Nominalizer',
+        'もの': 'Thing (Tangible)',
+        'この': 'This (Near Speaker)',
+        'その': 'That (Near Listener)',
+        'あの': 'That (Distant)',
+        'どの': 'Which?',
+        'これ': 'This one',
+        'それ': 'That one',
+        'あれ': 'That one over there',
+        'どれ': 'Which one?',
+        'ここ': 'Here',
+        'そこ': 'There',
+        'あそこ': 'Over there',
+        'どこ': 'Where?',
+        'ちゃん': 'Suffix for familiar names (Cute/Female)',
+        'くん': 'Suffix for familiar names (Male)',
+        'さん': 'Suffix for names (Mr./Ms.)',
+        'ちゃう': 'To do completely / Regret (te-shimau)',
+        'なきゃ': 'Must do (nakereba)',
+        'じゃ': 'Well then / To be (de-wa)',
         'たい': 'Want to...',
-        'れる': 'Passive/Potential form',
-        'られる': 'Passive/Potential form',
-        'させる': 'Causative form',
-        'ないで': 'Without doing...',
-        'ながら': 'While doing...',
-        'ば': 'If...',
-        'たら': 'If/When...',
-        'なら': 'If (contextual)...'
+        'れる': 'Passive / Potential Form',
+        'られる': 'Passive / Potential Form',
+        'させる': 'Causative Form',
+        'っ': 'Small Tsu (Glottal Stop)',
+        'ー': 'Long Vowel Mark'
     }
-
 
     hover_css = """
     .expression { font-size: 50px; cursor: pointer; position: relative; display: inline-block; font-weight: bold; }
@@ -394,6 +404,7 @@ for show in os.listdir(TRANSCRIPT_DIR):
     word_stats = {}
     word_pos = {}
     word_reading_katakana = {}
+    word_normalized = {}
 
     print(f"Scanning transcripts for: {show}")
 
@@ -438,16 +449,22 @@ for show in os.listdir(TRANSCRIPT_DIR):
                 if current_score <= 0: continue
 
                 sentence_tokens = []
-                for token in t.tokenize(clean_text):
-                    base = token.base_form
+                for token in sudachi_obj.tokenize(clean_text, sudachi_mode):
+                    base = token.dictionary_form()
+                    norm = token.normalized_form()
+
                     if is_garbage_token(base): continue
 
                     sentence_tokens.append(base)
                     all_words.append(base)
 
+                    pos_str = ",".join(token.part_of_speech())
+                    reading_str = token.reading_form()
+
                     if base not in word_pos:
-                        word_pos[base] = token.part_of_speech
-                        word_reading_katakana[base] = token.reading
+                        word_pos[base] = pos_str
+                        word_reading_katakana[base] = reading_str
+                        word_normalized[base] = norm
 
                     if base not in word_stats:
                         word_stats[base] = {'raw': clean_text, 'bolded': '', 'score': -999, 'episodes': set(),
@@ -456,7 +473,7 @@ for show in os.listdir(TRANSCRIPT_DIR):
                     word_stats[base]['episodes'].add(ep_name)
 
                     if current_score > word_stats[base]['score']:
-                        bolded = re.sub(f"({re.escape(token.surface)})", r"<b>\1</b>", clean_text, count=1)
+                        bolded = re.sub(f"({re.escape(token.surface())})", r"<b>\1</b>", clean_text, count=1)
                         word_stats[base].update(
                             {'raw': clean_text, 'bolded': bolded, 'score': current_score, 'tokens': []})
 
@@ -490,20 +507,23 @@ for show in os.listdir(TRANSCRIPT_DIR):
 
     for word in sorted_vocab:
         pos = word_pos.get(word, "")
+        norm = word_normalized.get(word, word)
         is_proper_noun = '固有名詞' in pos
 
+        if word in GRAMMAR_DICT:
+            meaning = GRAMMAR_DICT[word]
+            reading = word
+            source = "GrammarDict"
+            # Ensure reading is correct even if overridden
+            if word in word_reading_katakana:
+                reading = word_reading_katakana[word]
 
-        if word in name_map:
+        elif word in name_map:
             meaning = name_map[word]
             reading = word
             source = "NameMap"
             if word in word_reading_katakana:
                 reading = word_reading_katakana[word]
-
-        elif word in GRAMMAR_OVERRIDES:
-            meaning = GRAMMAR_OVERRIDES[word]
-            reading = word
-            source = "Grammar"
 
         else:
             if is_proper_noun:
@@ -512,16 +532,8 @@ for show in os.listdir(TRANSCRIPT_DIR):
                 meaning = romaji if romaji else "[Proper Noun]"
                 reading = word
                 source = "ProperNoun"
-
-            result = jam.lookup(word)
-            if result.entries:
-                entry = result.entries[0]
-                reading = entry.kana_forms[0].text if entry.kana_forms else word
-                meaning = "<br>".join(
-                    [f"{j + 1}. {', '.join([g.text for g in s.gloss])}" for j, s in enumerate(entry.senses)])
-                source = "Jamdict"
             else:
-                meaning, reading, source = get_definition(word)
+                meaning, reading, source = get_definition(word, norm)
                 with open('dict.csv', 'a', encoding='utf-8', newline='') as f:
                     writer = csv.writer(f)
                     writer.writerow([word, meaning, reading, source])
@@ -550,7 +562,6 @@ for show in os.listdir(TRANSCRIPT_DIR):
             sentence_notes_list.append((complexity_score, genanki.Note(model=sentence_model, fields=fields_data)))
 
         known_words.add(word)
-
 
     print(f"Adding {len(vocab_notes_list)} notes to Vocab Deck (Frequency Sorted)...")
     for note in vocab_notes_list:
