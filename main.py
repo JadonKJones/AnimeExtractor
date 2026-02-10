@@ -7,6 +7,7 @@ import re
 import random
 import hashlib
 import requests
+import subprocess  # NEW: For running FFmpeg
 from collections import Counter
 from sudachipy import tokenizer as sudachi_tokenizer
 from sudachipy import dictionary as sudachi_dictionary
@@ -84,10 +85,12 @@ except Exception as e:
 # Initialize Translator
 translator = GoogleTranslator(source='ja', target='en')
 TRANSCRIPT_DIR = 'Transcripts'
+MEDIA_DIR = 'react-anime/public/anki/media'  # NEW: Place to store images
 
 os.makedirs('cache', exist_ok=True)
 os.makedirs('react-anime/public/anki', exist_ok=True)
 os.makedirs('react-anime/public/csv', exist_ok=True)
+os.makedirs(MEDIA_DIR, exist_ok=True)
 
 if not os.path.exists(TRANSCRIPT_DIR):
     print(f"Error: '{TRANSCRIPT_DIR}' directory not found.")
@@ -98,6 +101,38 @@ print("Initializing Sudachi tokenizer...")
 sudachi_obj = sudachi_dictionary.Dictionary().create()
 sudachi_mode = sudachi_tokenizer.Tokenizer.SplitMode.C
 
+
+# --- NEW FUNCTION: EXTRACT SCREENSHOT ---
+def extract_screenshot(video_path, timestamp_str, output_filename):
+    """
+    Uses FFmpeg to extract a single frame at the given timestamp.
+    timestamp_str format example: '00:00:05.50' or '0:00:05.50'
+    """
+    output_path = os.path.join(MEDIA_DIR, output_filename)
+    if os.path.exists(output_path):
+        return True  # Already exists, skip
+
+    # FFmpeg command: -ss (seek) -i (input) -frames:v 1 (one frame) -q:v 2 (high quality jpg)
+    # We add 0.5 seconds to the timestamp to ensure we don't catch the previous scene during a cut
+    # But for simplicity, we'll trust the start time.
+    cmd = [
+        'ffmpeg',
+        '-ss', timestamp_str.replace(',', '.'),  # Ensure dot format for FFmpeg
+        '-i', video_path,
+        '-frames:v', '1',
+        '-q:v', '2',
+        '-y',  # Overwrite if exists
+        output_path
+    ]
+
+    try:
+        # Run silently
+        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
+
+
 for show in os.listdir(TRANSCRIPT_DIR):
     show_path = os.path.join(TRANSCRIPT_DIR, show)
 
@@ -105,6 +140,10 @@ for show in os.listdir(TRANSCRIPT_DIR):
         continue
 
     print(f"\nProcessing Show: {show}")
+
+    # NEW: Find video file for this show
+    # We assume video is in the same folder as the subtitle file
+    video_extensions = ['.mkv', '.mp4', '.avi', '.webm']
 
 
     def generate_id(name, salt=0):
@@ -213,25 +252,21 @@ for show in os.listdir(TRANSCRIPT_DIR):
         return "[Unavailable]"
 
 
-    def get_definition(word, normalized_word):
-        # 1. Try Local Dict
+    def get_definition(word, normalized_word, pos_info=None):
         local_result = check_local_dict(word)
         if local_result:
             return local_result
 
-        # 2. Try Jamdict with Normalized Form
         search_term = normalized_word if normalized_word else word
         result = jam.lookup(search_term)
 
         if result.entries:
-            # Simple fallback: just grab the first valid entry
             best_entry = result.entries[0]
             reading = best_entry.kana_forms[0].text if best_entry.kana_forms else search_term
             meaning = "<br>".join(
                 [f"{j + 1}. {', '.join([g.text for g in s.gloss])}" for j, s in enumerate(best_entry.senses)])
             return meaning, reading, "Jamdict"
 
-        # 3. Fallback to Jisho API
         return get_online_definition(search_term)
 
 
@@ -279,8 +314,6 @@ for show in os.listdir(TRANSCRIPT_DIR):
         return score
 
 
-    # --- THE GRAMMAR DICTIONARY ---
-    # This list intercepts the dictionary lookup for common structure words.
     GRAMMAR_DICT = {
         'ない': 'Not (Negative / Nonexistent)',
         'する': 'To do / To make',
@@ -349,45 +382,39 @@ for show in os.listdir(TRANSCRIPT_DIR):
     .meaning { text-align: left; margin-top: 20px; font-size: 18px; border-top: 1px solid #ccc; padding-top: 10px; }
     .sentence { margin-top: 20px; font-style: italic; background: #eee; padding: 10px; border-radius: 5px; font-size: 22px; }
     .translation { font-size: 16px; color: #7f8c8d; margin-top: 5px; }
+    .screenshot { margin-top: 15px; }
+    .screenshot img { max-width: 100%; height: auto; border-radius: 5px; }
     .footer { font-size: 12px; color: #bdc3c7; margin-top: 15px; border-top: 1px dashed #ccc; padding-top: 5px; }
     """ + hover_css
 
-    style_sentence = """
-    .card { font-family: "Noto Sans JP", "Hiragino Kaku Gothic Pro", "Meiryo", sans-serif; text-align: center; background-color: #fdfdfd; padding: 20px; }
-    .sentence-front { font-size: 32px; font-weight: normal; margin-bottom: 20px; line-height: 1.5; }
-    .sentence-front b { color: #e74c3c; font-weight: 900; } 
-    .reading { font-size: 20px; color: #7f8c8d; margin-bottom: 15px; }
-    .meaning { text-align: left; font-size: 18px; border-top: 1px solid #ccc; padding-top: 10px; }
-    .translation { font-size: 16px; color: #7f8c8d; margin-top: 10px; font-style: italic; }
-    .level { display: inline-block; padding: 2px 8px; border-radius: 4px; background: #3498db; color: white; font-size: 12px; }
-    """ + hover_css
-
+    # NEW: Fields include 'Image'
     fields = [{'name': 'Expression'}, {'name': 'Reading'}, {'name': 'Meaning'}, {'name': 'Level'},
               {'name': 'Frequency'},
-              {'name': 'Sentence'}, {'name': 'Translation'}, {'name': 'Episodes'}]
+              {'name': 'Sentence'}, {'name': 'Translation'}, {'name': 'Episodes'}, {'name': 'Image'}]
 
+    # NEW: Added {{Image}} to template
     vocab_model = genanki.Model(
         MODEL_ID_VOCAB,
-        'Japanese Anime Vocab v8 (+1 Sorting)',
+        'Japanese Anime Vocab v9 (Screenshots)',
         fields=fields,
         templates=[{
             'name': 'Vocab Card',
             'qfmt': '<div class="expression"><span class="reading-hover">{{Reading}}</span>{{Expression}}</div><br><div class="level">{{Level}}</div>',
-            'afmt': '{{FrontSide}}<hr id="answer"><div class="meaning">{{Meaning}}</div><div class="sentence">{{Sentence}}</div><div class="translation">{{Translation}}</div><div class="footer">Found in: {{Episodes}} | Count: {{Frequency}}x</div>'
+            'afmt': '{{FrontSide}}<hr id="answer"><div class="meaning">{{Meaning}}</div><div class="sentence">{{Sentence}}</div><div class="translation">{{Translation}}</div><div class="screenshot">{{Image}}</div><div class="footer">Found in: {{Episodes}} | Count: {{Frequency}}x</div>'
         }],
         css=style_vocab
     )
 
     sentence_model = genanki.Model(
         MODEL_ID_SENTENCE,
-        'Japanese Anime Sentence v6 (+1 Sorting & Hover)',
+        'Japanese Anime Sentence v7 (Screenshots)',
         fields=fields,
         templates=[{
             'name': 'Sentence Card',
             'qfmt': '<div class="sentence-front">{{Sentence}}</div>',
-            'afmt': '{{FrontSide}}<hr id="answer"><div class="expression"><span class="reading-hover">{{Reading}}</span>{{Expression}}</div><br><div class="level">{{Level}}</div><div class="meaning">{{Meaning}}</div><div class="translation">{{Translation}}</div>'
+            'afmt': '{{FrontSide}}<hr id="answer"><div class="expression"><span class="reading-hover">{{Reading}}</span>{{Expression}}</div><br><div class="level">{{Level}}</div><div class="meaning">{{Meaning}}</div><div class="translation">{{Translation}}</div><div class="screenshot">{{Image}}</div>'
         }],
-        css=style_sentence
+        css=style_vocab
     )
 
     vocab_deck = genanki.Deck(DECK_ID_VOCAB, f'Anime Vocabulary:: {show}')
@@ -405,6 +432,7 @@ for show in os.listdir(TRANSCRIPT_DIR):
     word_pos = {}
     word_reading_katakana = {}
     word_normalized = {}
+    media_files_to_package = []  # Keep track of generated images
 
     print(f"Scanning transcripts for: {show}")
 
@@ -414,37 +442,64 @@ for show in os.listdir(TRANSCRIPT_DIR):
 
         if is_srt or is_ass:
             ep_name = path.name.replace('.srt', '').replace('.ass', '')
+
+            # Find matching video file
+            video_file = None
+            for ext in video_extensions:
+                potential_video = os.path.join(show_path, ep_name + ext)
+                if os.path.exists(potential_video):
+                    video_file = potential_video
+                    break
+
+            if not video_file:
+                print(f"  [Warning] No video file found for {ep_name}. Skipping screenshots.")
+
             try:
                 with open(path, 'r', encoding='utf8') as file:
                     lines = file.read().split('\n')
             except:
                 continue
 
-            parsed_lines = []
+            parsed_lines = []  # List of tuples: (text, start_time)
 
             if is_srt:
-                for text in lines:
-                    text = text.strip()
-                    if '♪' in text: continue
-                    clean_text = re.sub(r'\{.*?\}', '', text)
-                    clean_text = re.sub(r'[（\(].*?[）\)]', '', clean_text).strip()
-                    if not clean_text or "-->" in clean_text or clean_text.isdigit(): continue
-                    parsed_lines.append(clean_text)
+                # Basic SRT parsing to catch timestamps
+                # Format:
+                # 00:00:01,000 --> 00:00:04,000
+                # Text
+                for i, line in enumerate(lines):
+                    if "-->" in line:
+                        start_time = line.split("-->")[0].strip()
+                        # Get text from subsequent lines until blank
+                        text_lines = []
+                        j = i + 1
+                        while j < len(lines) and lines[j].strip() != "" and not lines[j].strip().isdigit():
+                            t = lines[j].strip()
+                            clean_t = re.sub(r'\{.*?\}', '', t)
+                            clean_t = re.sub(r'[（\(].*?[）\)]', '', clean_t).strip()
+                            if clean_t and not "-->" in clean_t:
+                                text_lines.append(clean_t)
+                            j += 1
+
+                        full_text = " ".join(text_lines)
+                        if full_text and not "♪" in full_text:
+                            parsed_lines.append((full_text, start_time))
 
             elif is_ass:
                 for text in lines:
                     if text.startswith('Dialogue:'):
                         parts = text.split(',', 9)
                         if len(parts) > 9:
+                            start_time = parts[1].strip()
                             content = parts[9].strip()
                             if '♪' in content: continue
                             clean_text = re.sub(r'\{.*?\}', '', content)
                             clean_text = clean_text.replace(r'\N', ' ').replace(r'\n', ' ').replace(r'\h', ' ')
                             clean_text = re.sub(r'[（\(].*?[）\)]', '', clean_text).strip()
                             if clean_text:
-                                parsed_lines.append(clean_text)
+                                parsed_lines.append((clean_text, start_time))
 
-            for clean_text in parsed_lines:
+            for clean_text, timestamp in parsed_lines:
                 current_score = score_sentence(clean_text)
                 if current_score <= 0: continue
 
@@ -452,7 +507,6 @@ for show in os.listdir(TRANSCRIPT_DIR):
                 for token in sudachi_obj.tokenize(clean_text, sudachi_mode):
                     base = token.dictionary_form()
                     norm = token.normalized_form()
-
                     if is_garbage_token(base): continue
 
                     sentence_tokens.append(base)
@@ -467,15 +521,28 @@ for show in os.listdir(TRANSCRIPT_DIR):
                         word_normalized[base] = norm
 
                     if base not in word_stats:
-                        word_stats[base] = {'raw': clean_text, 'bolded': '', 'score': -999, 'episodes': set(),
-                                            'tokens': []}
+                        word_stats[base] = {
+                            'raw': clean_text,
+                            'bolded': '',
+                            'score': -999,
+                            'episodes': set(),
+                            'tokens': [],
+                            'video': None,  # New
+                            'timestamp': None  # New
+                        }
 
                     word_stats[base]['episodes'].add(ep_name)
 
                     if current_score > word_stats[base]['score']:
                         bolded = re.sub(f"({re.escape(token.surface())})", r"<b>\1</b>", clean_text, count=1)
-                        word_stats[base].update(
-                            {'raw': clean_text, 'bolded': bolded, 'score': current_score, 'tokens': []})
+                        word_stats[base].update({
+                            'raw': clean_text,
+                            'bolded': bolded,
+                            'score': current_score,
+                            'tokens': [],
+                            'video': video_file,
+                            'timestamp': timestamp
+                        })
 
                 for token_base in sentence_tokens:
                     if token_base in word_stats and word_stats[token_base]['raw'] == clean_text:
@@ -497,7 +564,7 @@ for show in os.listdir(TRANSCRIPT_DIR):
         translation_cache.update(new_trans)
         save_cache(translation_cache)
 
-    print("Generating Notes...")
+    print("Generating Notes & Screenshots...")
 
     sorted_vocab = [w for w, c in counts.most_common() if c >= 2]
     known_words = set()
@@ -505,26 +572,22 @@ for show in os.listdir(TRANSCRIPT_DIR):
     vocab_notes_list = []
     sentence_notes_list = []
 
-    for word in sorted_vocab:
+    for i, word in enumerate(sorted_vocab):
         pos = word_pos.get(word, "")
         norm = word_normalized.get(word, word)
         is_proper_noun = '固有名詞' in pos
 
+        # --- DEFINITION LOGIC (Same as before) ---
         if word in GRAMMAR_DICT:
             meaning = GRAMMAR_DICT[word]
             reading = word
             source = "GrammarDict"
-            # Ensure reading is correct even if overridden
-            if word in word_reading_katakana:
-                reading = word_reading_katakana[word]
-
+            if word in word_reading_katakana: reading = word_reading_katakana[word]
         elif word in name_map:
             meaning = name_map[word]
             reading = word
             source = "NameMap"
-            if word in word_reading_katakana:
-                reading = word_reading_katakana[word]
-
+            if word in word_reading_katakana: reading = word_reading_katakana[word]
         else:
             if is_proper_noun:
                 kana = word_reading_katakana.get(word, word)
@@ -545,6 +608,22 @@ for show in os.listdir(TRANSCRIPT_DIR):
         ep_list = ", ".join(sorted(list(info['episodes'])))
         trans = translation_cache.get(info['raw'], "[Unavailable]")
 
+        # --- SCREENSHOT LOGIC ---
+        image_field = ""
+        if info.get('video') and info.get('timestamp'):
+            # Create a unique filename for this word/sentence
+            # Clean timestamp for filename: 00:00:01,230 -> 00_00_01_230
+            clean_ts = info['timestamp'].replace(':', '_').replace(',', '_').replace('.', '_')
+            clean_ep = os.path.basename(info['video']).split('.')[0]  # Show Name
+            img_filename = f"{clean_ep}_{clean_ts}.jpg"
+
+            # Extract
+            if extract_screenshot(info['video'], info['timestamp'], img_filename):
+                image_field = f'<img src="{img_filename}">'
+                media_files_to_package.append(os.path.join(MEDIA_DIR, img_filename))
+
+        # ------------------------
+
         sentence_tokens = info.get('tokens', [])
         unknown_count = 0
         for t in sentence_tokens:
@@ -554,7 +633,8 @@ for show in os.listdir(TRANSCRIPT_DIR):
         sentence_len = len(info['raw'])
         complexity_score = (unknown_count * 100) + sentence_len
 
-        fields_data = [word, reading, meaning, str(level), str(counts[word]), info['bolded'], trans, ep_list]
+        fields_data = [word, reading, meaning, str(level), str(counts[word]), info['bolded'], trans, ep_list,
+                       image_field]
         csv_data.append(fields_data)
 
         if word not in excluded_words:
@@ -562,6 +642,10 @@ for show in os.listdir(TRANSCRIPT_DIR):
             sentence_notes_list.append((complexity_score, genanki.Note(model=sentence_model, fields=fields_data)))
 
         known_words.add(word)
+
+        # Progress indicator for screenshots
+        if i % 50 == 0:
+            print(f"  > Processed {i}/{len(sorted_vocab)} words...")
 
     print(f"Adding {len(vocab_notes_list)} notes to Vocab Deck (Frequency Sorted)...")
     for note in vocab_notes_list:
@@ -573,12 +657,17 @@ for show in os.listdir(TRANSCRIPT_DIR):
         sentence_deck.add_note(note)
 
     print("Creating APKG package...")
-    genanki.Package([vocab_deck, sentence_deck]).write_to_file(f'react-anime/public/anki/{show}_Master.apkg')
+    # NEW: We must pass media_files to the Package constructor
+    # Make sure media list is unique
+    media_files_to_package = list(set(media_files_to_package))
+
+    genanki.Package([vocab_deck, sentence_deck], media_files=media_files_to_package).write_to_file(
+        f'react-anime/public/anki/{show}_Master.apkg')
 
     with open(f'react-anime/public/csv/{show}_Vocabulary_Full.csv', 'w', encoding='utf-8', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(
-            ['Expression', 'Reading', 'Meaning', 'Level', 'Frequency', 'Sentence', 'Translation', 'Episodes'])
+            ['Expression', 'Reading', 'Meaning', 'Level', 'Frequency', 'Sentence', 'Translation', 'Episodes', 'Image'])
         writer.writerows(csv_data)
 
-    print(f"Done! Created 'anki/{show}_Master.apkg' and 'csv/{show}_Vocabulary_Full.csv' (CSV contains full list).")
+    print(f"Done! Created 'anki/{show}_Master.apkg' with {len(media_files_to_package)} screenshots.")
