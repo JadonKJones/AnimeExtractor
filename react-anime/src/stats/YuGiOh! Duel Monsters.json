@@ -8,11 +8,11 @@
     "Unique_kanji_used_once": 500,
     "Unique_kanji_readings": 6115,
     "Words_not_found_in_core_Lists": 4636,
-    "Average_Difficulty_Unweighted": 47,
-    "Perceived_Difficulty_Weighted": 37,
+    "Average_Difficulty_Unweighted": 48,
+    "Perceived_Difficulty_Weighted": 38,
     "Peak_difficulty_90th_percentile": 100,
     "In_Core_1.5K": 1191,
-    "In_Core_10K": 17,
-    "In_Core_2K": 271,
+    "In_Core_10K": 12,
+    "In_Core_2K": 276,
     "Real_Life_Japanese": 4636
 }

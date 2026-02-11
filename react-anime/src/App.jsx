@@ -61,7 +61,7 @@ function App() {
                   <p><strong>Average Difficulty:</strong> {selectedAnime.Perceived_Difficulty_Weighted}</p>
                   
                   <a 
-                    href={`/anki/${selectedAnime.Anime}_Master.apkg`} 
+                    href={`anki/${selectedAnime.Anime}_Master.apkg`} 
                     download 
                     className="download-button"
                   >
@@ -73,8 +73,8 @@ function App() {
               <div className="visuals-section">
                 <h3>Vocabulary Analysis</h3>
                 <div className="graph-container">
-                    <img src={`/graphs/${selectedAnime.Anime}_level_dist_bar.png`} alt="JLPT Levels" />
-                    <img src={`/graphs/${selectedAnime.Anime}_core_coverage_pie.png`} alt="Core Coverage" />
+                    <img src={`graphs/${selectedAnime.Anime}_level_dist_bar.png`} alt="JLPT Levels" />
+                    <img src={`graphs/${selectedAnime.Anime}_core_coverage_pie.png`} alt="Core Coverage" />
                 </div>
               </div>
             </div>

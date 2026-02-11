@@ -9,10 +9,10 @@
     "Unique_kanji_readings": 3300,
     "Words_not_found_in_core_Lists": 2023,
     "Average_Difficulty_Unweighted": 43,
-    "Perceived_Difficulty_Weighted": 29,
+    "Perceived_Difficulty_Weighted": 30,
     "Peak_difficulty_90th_percentile": 70,
     "In_Core_1.5K": 943,
-    "In_Core_10K": 22,
-    "In_Core_2K": 312,
+    "In_Core_10K": 16,
+    "In_Core_2K": 318,
     "Real_Life_Japanese": 2023
 }

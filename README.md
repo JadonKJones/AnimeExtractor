@@ -2,6 +2,9 @@
 
 A Python-powered pipeline to transform anime transcripts into optimized, high-frequency Anki decks. While other tools exist, this project is built for the learner who values full control and offline portability.
 
+# UPDATE UPDATE!!!!!
+There are pictures in the decks now. Every card ~~in every deck~~ in the Lucky Star and Azumanga Daioh deck should have a screenshot of the scene where the example sentence was said in order to give more context.
+
 ## Features
 
 * **Dual-Deck Generation:** Automatically creates both a Vocabulary deck and a Sentence deck.
@@ -21,7 +24,7 @@ A Python-powered pipeline to transform anime transcripts into optimized, high-fr
 
 ### Q: How long would it take for me to make my own deck
 
-**A:** Give or take 25 minutes. There are a lot of words in these shows.
+**A:** Give or take ~~an hour~~ like 7 minutes. There are a lot of words in these shows.
 
 ### Q: What's the point then?
 
@@ -33,7 +36,7 @@ As to why I want anime decks instead of using just a Core 10K list? Real life Ja
 <sub>You're gonna be talking about random stuff like chocolate cornets or watching a beautiful sunset or going to concerts all the time. When's the last time you had a meaningful conversation about the weather?</sub>
 
 ### Q: What words do the decks contain?
-**A:** The decks have every single word that's said in the anime minus the ones in the core 1.5K deck. They're sorted in order based on frequency so something like こなた - Konata (Lucky Star) or "ナルト" - "Naruto Run" (Naruto)  while something like "ふうし" -satire (satire) will be later in the deck.
+**A:** The decks have every single word that's said in the anime minus the ones in the core 1.5K deck. They're sorted in order based on frequency so something like こなた - Konata (Lucky Star) or "ナルト" - "Naruto Run" (Naruto)  while something like "ふうし" -satire (Watamote) will be later in the deck.
 
 ### Q: How good are the decks?
 **A:** To be fair im not very good at Japanese so I cannot vet the accuracy of the cards. I use jamdict and jisho so if its bad blame them not me.
@@ -54,8 +57,7 @@ Given this is Anki and not jpdb obviously there's gonna be doubles from any core
 ### Alternative: Pre-built Decks
 
 If you just want the Anki files for the shows I have already processed, check out the GitHub Pages site at:
-[jadonkjones.github.io/AnimeExtractor](jadonkjones.github.io/AnimeExtractor)
-
+jadonkjones.github.io/AnimeExtractor
 
 
 

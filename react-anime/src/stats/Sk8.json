@@ -9,10 +9,10 @@
     "Unique_kanji_readings": 1293,
     "Words_not_found_in_core_Lists": 682,
     "Average_Difficulty_Unweighted": 39,
-    "Perceived_Difficulty_Weighted": 33,
-    "Peak_difficulty_90th_percentile": 64,
+    "Perceived_Difficulty_Weighted": 34,
+    "Peak_difficulty_90th_percentile": 65,
     "In_Core_1.5K": 531,
-    "In_Core_10K": 7,
-    "In_Core_2K": 73,
+    "In_Core_10K": 6,
+    "In_Core_2K": 74,
     "Real_Life_Japanese": 682
 }

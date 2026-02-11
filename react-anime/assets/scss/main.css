@@ -107,7 +107,7 @@ header h1 strong {
 }
 .content-wrap main .anime-list .anime-card {
   flex: 1 1 33.333%;
-  max-width: 100%;
+  max-width: 25vh;
   padding: 16px 8px;
 }
 .content-wrap main .anime-list .anime-card a {
