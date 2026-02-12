@@ -39,9 +39,11 @@ MISTRANSLATION_FIXES = {
     '部長': {'reading': 'ぶちょう', 'meaning': 'Club President (School Context)'},
 }
 
+
 def generate_id(name, salt=0):
     hash_obj = hashlib.sha256((name + str(salt)).encode())
     return int(hash_obj.hexdigest(), 16) % 10 ** 10
+
 
 MODEL_ID_VOCAB = generate_id(show_name, salt=1)
 DECK_ID_VOCAB = generate_id(show_name, salt=2)
@@ -59,7 +61,7 @@ style_vocab = """
     position: relative; 
     display: inline-block; 
     font-weight: bold;
-    margin-top: 40px;
+    margin-top: 20px;
 }
 
 .reading-hover { 
@@ -78,31 +80,46 @@ style_vocab = """
 .level { display: inline-block; padding: 2px 12px; border-radius: 5px; background: #3498db; color: white; font-size: 14px; margin-top: 10px; }
 .meaning { text-align: left; margin-top: 30px; font-size: 20px; border-top: 2px solid #eee; padding-top: 15px; line-height: 1.5; }
 .sentence { margin-top: 20px; background: #f9f9f9; padding: 15px; border-radius: 10px; font-size: 26px; border-left: 5px solid #3498db; text-align: left; }
+.source-tag { font-size: 14px; color: #95a5a6; margin-top: 5px; text-align: right; font-style: italic; }
 .translation { font-size: 18px; color: #666; margin-top: 10px; font-style: italic; text-align: left; }
 
 .screenshot { margin-top: 20px; }
 .screenshot img { max-width: 100%; height: auto; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
 
+.audio-btn { margin-top: 10px; }
+
 .footer { font-size: 12px; color: #bdc3c7; margin-top: 30px; border-top: 1px dashed #ddd; padding-top: 10px; }
 """
 
+# Updated Fields
 fields = [
     {'name': 'Expression'}, {'name': 'Reading'}, {'name': 'Meaning'},
     {'name': 'Level'}, {'name': 'Frequency'}, {'name': 'Sentence'},
-    {'name': 'Translation'}, {'name': 'Shows'}, {'name': 'Image'}
+    {'name': 'Translation'}, {'name': 'Shows'}, {'name': 'Image'},
+    {'name': 'WordAudio'}, {'name': 'SentenceAudio'}, {'name': 'SourceShow'}
 ]
 
 vocab_model = genanki.Model(
-    MODEL_ID_VOCAB, 'Anime Mega Vocab v3 (Randomized)', fields=fields,
+    MODEL_ID_VOCAB, 'Anime Mega Vocab v4 (Audio + Source)', fields=fields,
     templates=[{
         'name': 'Vocab Card',
-        'qfmt': '<div class="expression"><span class="reading-hover">{{Reading}}</span>{{Expression}}</div><br><div class="level">{{Level}}</div>',
+        'qfmt': '''
+            <div class="expression"><span class="reading-hover">{{Reading}}</span>{{Expression}}</div>
+            <div class="audio-btn">{{WordAudio}}</div>
+            <br><div class="level">{{Level}}</div>
+        ''',
         'afmt': '''{{FrontSide}}<hr id="answer">
                 <div class="meaning">{{Meaning}}</div>
-                <div class="sentence">{{Sentence}}</div>
+
+                <div class="sentence">
+                    {{Sentence}}
+                    <div class="audio-btn">{{SentenceAudio}}</div>
+                    <div class="source-tag">Source: {{SourceShow}}</div>
+                </div>
+
                 <div class="translation">{{Translation}}</div>
                 <div class="screenshot">{{Image}}</div>
-                <div class="footer">Found in: {{Shows}} | Total Count: {{Frequency}}x</div>'''
+                <div class="footer">Appears in: {{Shows}} | Total Count: {{Frequency}}x</div>'''
     }], css=style_vocab
 )
 
@@ -113,13 +130,15 @@ word_entries = {}  # Key: Expression, Value: List of ALL rows found
 total_counts = Counter()
 word_shows = {}
 media_files = []
-image_path_map = {}
+media_path_map = {}  # Maps filename (e.g., 'img.jpg') to full path
 
-print("Mapping media files...")
+print("Mapping media files (Images & Audio)...")
+# We now scan for MP3s as well
+allowed_exts = ('.jpg', '.jpeg', '.png', '.webp', '.mp3')
 for root, dirs, files in os.walk(MEDIA_ROOT):
     for f in files:
-        if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
-            image_path_map[f] = os.path.join(root, f)
+        if f.lower().endswith(allowed_exts):
+            media_path_map[f] = os.path.join(root, f)
 
 print("Scanning CSVs...")
 for filename in os.listdir(CSV_FOLDER):
@@ -135,6 +154,10 @@ for filename in os.listdir(CSV_FOLDER):
                 if expr not in word_shows: word_shows[expr] = set()
                 word_shows[expr].add(show)
 
+                # IMPORTANT: Inject the specific show name into the row data
+                # This allows us to say "Source: Naruto" later
+                row['_source_show_name'] = show
+
                 if expr not in word_entries:
                     word_entries[expr] = []
                 word_entries[expr].append(row)
@@ -148,13 +171,23 @@ print(f"Building deck with {len(total_counts)} unique words...")
 for word, count in total_counts.most_common():
     all_possible_rows = word_entries[word]
 
-    # SELECTION LOGIC: Fix the "Crossover" bug
-    # 1. Filter for rows that have a valid image tag
-    entries_with_image = [r for r in all_possible_rows if r.get('Image') and '<img' in r['Image']]
+    # SELECTION LOGIC: Find the "Perfect" Card
+    # Priority 1: Has Image AND Audio
+    # Priority 2: Has Image
+    # Priority 3: Has Audio
+    # Priority 4: Random
 
-    # 2. Pick ONE source row to provide the Sentence, Translation, and Image
-    if entries_with_image:
-        chosen_row = random.choice(entries_with_image)
+    perfect_rows = [r for r in all_possible_rows if
+                    (r.get('Image') and '<img' in r['Image']) and (r.get('WordAudio') and '[sound:' in r['WordAudio'])]
+    image_rows = [r for r in all_possible_rows if r.get('Image') and '<img' in r['Image']]
+    audio_rows = [r for r in all_possible_rows if r.get('WordAudio') and '[sound:' in r['WordAudio']]
+
+    if perfect_rows:
+        chosen_row = random.choice(perfect_rows)
+    elif image_rows:
+        chosen_row = random.choice(image_rows)
+    elif audio_rows:
+        chosen_row = random.choice(audio_rows)
     else:
         chosen_row = random.choice(all_possible_rows)
 
@@ -165,16 +198,36 @@ for word, count in total_counts.most_common():
         reading = MISTRANSLATION_FIXES[word]['reading']
         meaning = MISTRANSLATION_FIXES[word]['meaning']
 
-    # Image logic (Sync'd with the chosen row)
-    img_tag = chosen_row.get('Image', '').replace('""', '"')
-    final_img_tag = ""
-    if img_tag:
-        match = re.search(r'src="([^"]+)"', img_tag)
-        if match:
-            fname = match.group(1)
-            if fname in image_path_map:
-                media_files.append(image_path_map[fname])
-                final_img_tag = f'<img src="{fname}">'
+
+    # --- HELPER: Extract Media Function ---
+    def extract_media(tag):
+        """Finds [sound:...] or src="..." and adds to package list"""
+        if not tag: return ""
+        # Check for Image src
+        img_match = re.search(r'src="([^"]+)"', tag)
+        if img_match:
+            fname = img_match.group(1)
+            if fname in media_path_map:
+                media_files.append(media_path_map[fname])
+                return tag  # Return original tag if valid
+
+        # Check for Audio sound tag
+        aud_match = re.search(r'\[sound:([^\]]+)\]', tag)
+        if aud_match:
+            fname = aud_match.group(1)
+            if fname in media_path_map:
+                media_files.append(media_path_map[fname])
+                return tag
+        return ""
+
+
+    # Process Media Fields
+    final_img_tag = extract_media(chosen_row.get('Image', ''))
+    final_word_audio = extract_media(chosen_row.get('WordAudio', ''))
+    final_sent_audio = extract_media(chosen_row.get('SentenceAudio', ''))
+
+    # Get the specific show for this sentence
+    source_show = chosen_row.get('_source_show_name', 'Unknown')
 
     # Assembly
     fields_data = [
@@ -183,10 +236,13 @@ for word, count in total_counts.most_common():
         meaning,
         chosen_row.get('Level', 'Unlabeled'),
         str(count),
-        chosen_row['Sentence'],      # From chosen_row
-        chosen_row['Translation'],   # From chosen_row
-        ", ".join(sorted(list(word_shows[word]))),
-        final_img_tag                # From chosen_row
+        chosen_row['Sentence'],
+        chosen_row['Translation'],
+        ", ".join(sorted(list(word_shows[word]))),  # List of ALL shows
+        final_img_tag,
+        final_word_audio,
+        final_sent_audio,
+        source_show  # The specific show for this sentence
     ]
     mega_deck.add_note(genanki.Note(model=vocab_model, fields=fields_data))
 
@@ -197,3 +253,4 @@ package = genanki.Package(mega_deck)
 package.media_files = list(set(media_files))
 package.write_to_file(out_file)
 print(f"Export complete: {out_file}")
+print(f"Total media files packaged: {len(package.media_files)}")
