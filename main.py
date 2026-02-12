@@ -6,8 +6,8 @@ import re
 import requests
 import cv2
 import hashlib
-import subprocess
 import time
+import asyncio  # <--- REQUIRED for Edge TTS
 from collections import Counter
 
 # --- IMPORTS ---
@@ -16,11 +16,13 @@ from sudachipy import dictionary as sudachi_dictionary
 from jamdict import Jamdict
 import genanki
 from deep_translator import GoogleTranslator
+import edge_tts  # <--- NEW LIBRARY
 
 try:
     import cgi
 except ImportError:
     import legacy_cgi as cgi
+
     sys.modules['cgi'] = cgi
 
 # ==========================================
@@ -71,11 +73,13 @@ if not os.path.exists(NAME_FILE):
     with open(NAME_FILE, 'w', encoding='utf8') as f:
         json.dump(DEFAULT_NAMES, f, ensure_ascii=False, indent=4)
 
+
 def load_names():
     if os.path.exists(NAME_FILE):
         with open(NAME_FILE, 'r', encoding='utf8') as f:
             return json.load(f)
     return DEFAULT_NAMES
+
 
 name_map = load_names()
 
@@ -90,7 +94,6 @@ except:
 print("Initializing dictionary...")
 try:
     jam = Jamdict()
-    # Pre-check to ensure it works
     _ = jam.lookup('たべる')
     print("Dictionary loaded successfully.")
 except Exception as e:
@@ -132,8 +135,11 @@ def find_video_fuzzy(show_folder, episode_name):
         return potential_matches[0]
     return None
 
-def extract_screenshot(video_path, timestamp_str, output_filename,show):
-    show_media_dir = os.path.join(MEDIA_DIR, show)
+
+def extract_screenshot(video_path, timestamp_str, output_filename, show):
+    # Sanitize the show name for the directory path to avoid encoding issues
+    safe_show = re.sub(r'[^\x00-\x7f]', '', show).strip() or "Show"
+    show_media_dir = os.path.join(MEDIA_DIR, safe_show)
     output_path = os.path.join(show_media_dir, output_filename)
 
     if os.path.exists(output_path):
@@ -149,16 +155,22 @@ def extract_screenshot(video_path, timestamp_str, output_filename,show):
         success, image = cap.read()
         if success:
             image = cv2.resize(image, (854, 480))
-            cv2.imwrite(output_path, image)
-            cap.release()
-            return True
+            # Use imencode to handle potential non-ascii in output_path if it still exists
+            is_success, buffer = cv2.imencode(".jpg", image)
+            if is_success:
+                with open(output_path, "wb") as f:
+                    f.write(buffer)
+                cap.release()
+                return True
     except Exception as e:
         print(f"OpenCV Error: {e}")
     return False
 
+
 def generate_id(name, salt=0):
     hash_obj = hashlib.sha256((name + str(salt)).encode())
     return int(hash_obj.hexdigest(), 16) % 10 ** 10
+
 
 def kana_to_romaji(text):
     consonants = {
@@ -199,12 +211,14 @@ def kana_to_romaji(text):
         i += 1
     return res.capitalize()
 
+
 def is_garbage_token(base_word):
     if not re.match(r'^[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf\u3005\u30fc]+$', base_word):
         return True
     if len(base_word) == 1 and re.match(r'[\u3040-\u309f]', base_word):
         return True
     return False
+
 
 def bulk_translate(sentences, batch_size=50):
     translated_dict = {}
@@ -240,6 +254,7 @@ def bulk_translate(sentences, batch_size=50):
         time.sleep(0.6)
     return translated_dict
 
+
 def check_local_dict(word, filename='dict.csv'):
     if not os.path.exists(filename):
         return None
@@ -249,6 +264,7 @@ def check_local_dict(word, filename='dict.csv'):
             if row and row[0].strip() == word:
                 return row[1].strip(), row[2].strip(), row[3].strip()
     return None
+
 
 def get_online_definition(word):
     try:
@@ -268,6 +284,7 @@ def get_online_definition(word):
         pass
     return "No definition found", word, "None"
 
+
 def get_definition(word, normalized_word):
     local_result = check_local_dict(word)
     if local_result:
@@ -285,6 +302,7 @@ def get_definition(word, normalized_word):
 
     return get_online_definition(search_term)
 
+
 def score_sentence(text):
     if len(text) < 5 or len(text) > 60: return 0
     stutter = text.count('…') + text.count('..')
@@ -295,13 +313,60 @@ def score_sentence(text):
     return score
 
 
+# --- NEW: ASYNC WRAPPER FOR EDGE TTS ---
+async def _generate_audio_edge(text, output_file, voice="ja-JP-NanamiNeural"):
+    """
+    Actually calls the Edge TTS API.
+    Voices: ja-JP-NanamiNeural (Female), ja-JP-KeitaNeural (Male)
+    """
+    try:
+        communicate = edge_tts.Communicate(text, voice)
+        await communicate.save(output_file)
+        return True
+    except Exception as e:
+        print(f"    [EdgeTTS Error] {e}")
+        return False
+
+
+def generate_audio_file(text, filename_prefix, show_name):
+    """
+    Wrapper that runs the async Edge TTS in a sync way.
+    """
+    if not text:
+        return None, ""
+
+    # Clean filename
+    safe_filename = re.sub(r'[\\/*?:"<>|]', "", filename_prefix)
+    safe_filename = safe_filename[:100]  # Limit length
+    filename = f"{safe_filename}.mp3"
+
+    show_media_dir = os.path.join(MEDIA_DIR, show_name)
+    if not os.path.exists(show_media_dir):
+        os.makedirs(show_media_dir, exist_ok=True)
+
+    full_path = os.path.join(show_media_dir, filename)
+
+    # Check cache/existence
+    if not os.path.exists(full_path):
+        # Run async function in sync context
+        try:
+            asyncio.run(_generate_audio_edge(text, full_path))
+        except Exception as e:
+            print(f"  [Audio Gen Failed] {e}")
+            return None, ""
+
+    # Verify file was actually created
+    if os.path.exists(full_path) and os.path.getsize(full_path) > 0:
+        return full_path, f"[sound:{filename}]"
+
+    return None, ""
+
+
 # ==========================================
 # DICTIONARY CONSTANTS
 # ==========================================
 
 # --- NEW TABLE: FREQUENT MISTRANSLATIONS ---
-# These words are often misidentified by dictionaries due to
-# hiragana collision (e.g., 'nee' = older sister vs 'nee' = hey)
 MISTRANSLATION_FIXES = {
     # --- 共通・代名詞・応答 ---
     '私': {'reading': 'わたし', 'meaning': 'I / Me'},
@@ -417,7 +482,6 @@ MISTRANSLATION_FIXES = {
     '・': {'reading': '・', 'meaning': '(Punctuation / Name separator)'},
     'ヶ': {'reading': 'ヶ', 'meaning': '(Counter / Place name marker)'},
 
-
     # --- Context-Specific Terminology ---
     '玉': {'reading': 'たま', 'meaning': 'Ball / Coin / Sphere / Attack orb'},
     '弾': {'reading': 'たま', 'meaning': 'Bullet / Blast / Projectile'},
@@ -526,25 +590,29 @@ def process_single_show(show):
         with open(CACHE_FILE, 'w', encoding='utf8') as f:
             json.dump(cache_data, f, ensure_ascii=False, indent=4)
 
+    # --- UPDATED FIELDS: Added WordAudio and SentenceAudio ---
     fields = [{'name': 'Expression'}, {'name': 'Reading'}, {'name': 'Meaning'}, {'name': 'Level'},
               {'name': 'Frequency'}, {'name': 'Sentence'}, {'name': 'Translation'},
-              {'name': 'Episodes'}, {'name': 'Image'}]
+              {'name': 'Episodes'}, {'name': 'Image'}, {'name': 'WordAudio'}, {'name': 'SentenceAudio'}]
 
     vocab_model = genanki.Model(
-        MODEL_ID_VOCAB, 'Japanese Anime Vocab v9 (Screenshots)', fields=fields,
+        MODEL_ID_VOCAB, 'Japanese Anime Vocab v10 (Screenshots + Audio)', fields=fields,
         templates=[{
             'name': 'Vocab Card',
-            'qfmt': '<div class="expression"><span class="reading-hover">{{Reading}}</span>{{Expression}}</div><br><div class="level">{{Level}}</div>',
-            'afmt': '{{FrontSide}}<hr id="answer"><div class="meaning">{{Meaning}}</div><div class="sentence">{{Sentence}}</div><div class="translation">{{Translation}}</div><div class="screenshot">{{Image}}</div><div class="footer">Found in: {{Episodes}} | Count: {{Frequency}}x</div>'
+            # Added {{WordAudio}} to Front
+            'qfmt': '<div class="expression"><span class="reading-hover">{{Reading}}</span>{{Expression}}</div><br>{{WordAudio}}<br><div class="level">{{Level}}</div>',
+            # Added {{SentenceAudio}} to Back
+            'afmt': '{{FrontSide}}<hr id="answer"><div class="meaning">{{Meaning}}</div><div class="sentence">{{Sentence}}<br>{{SentenceAudio}}</div><div class="translation">{{Translation}}</div><div class="screenshot">{{Image}}</div><div class="footer">Found in: {{Episodes}} | Count: {{Frequency}}x</div>'
         }], css=STYLE_VOCAB
     )
 
     sentence_model = genanki.Model(
-        MODEL_ID_SENTENCE, 'Japanese Anime Sentence v7 (Screenshots)', fields=fields,
+        MODEL_ID_SENTENCE, 'Japanese Anime Sentence v8 (Screenshots + Audio)', fields=fields,
         templates=[{
             'name': 'Sentence Card',
-            'qfmt': '<div class="sentence-front">{{Sentence}}</div>',
-            'afmt': '{{FrontSide}}<hr id="answer"><div class="expression"><span class="reading-hover">{{Reading}}</span>{{Expression}}</div><br><div class="level">{{Level}}</div><div class="meaning">{{Meaning}}</div><div class="translation">{{Translation}}</div><div class="screenshot">{{Image}}</div>'
+            # Added {{SentenceAudio}} to Front
+            'qfmt': '<div class="sentence-front">{{Sentence}}<br>{{SentenceAudio}}</div>',
+            'afmt': '{{FrontSide}}<hr id="answer"><div class="expression"><span class="reading-hover">{{Reading}}</span>{{Expression}}</div><br>{{WordAudio}}<div class="level">{{Level}}</div><div class="meaning">{{Meaning}}</div><div class="translation">{{Translation}}</div><div class="screenshot">{{Image}}</div>'
         }], css=STYLE_VOCAB
     )
 
@@ -627,11 +695,14 @@ def process_single_show(show):
                         word_reading_katakana[base] = reading_str
                         word_normalized[base] = norm
                     if base not in word_stats:
-                        word_stats[base] = {'raw': clean_text, 'bolded': '', 'score': -999, 'episodes': set(), 'tokens': [], 'video': None, 'timestamp': None}
+                        word_stats[base] = {'raw': clean_text, 'bolded': '', 'score': -999, 'episodes': set(),
+                                            'tokens': [], 'video': None, 'timestamp': None}
                     word_stats[base]['episodes'].add(ep_name)
                     if current_score > word_stats[base]['score']:
                         bolded = re.sub(f"({re.escape(token.surface())})", r"<b>\1</b>", clean_text, count=1)
-                        word_stats[base].update({'raw': clean_text, 'bolded': bolded, 'score': current_score, 'tokens': [], 'video': video_file, 'timestamp': timestamp})
+                        word_stats[base].update(
+                            {'raw': clean_text, 'bolded': bolded, 'score': current_score, 'tokens': [],
+                             'video': video_file, 'timestamp': timestamp})
                 for token_base in sentence_tokens:
                     if token_base in word_stats and word_stats[token_base]['raw'] == clean_text:
                         word_stats[token_base]['tokens'] = sentence_tokens
@@ -654,9 +725,10 @@ def process_single_show(show):
             new_results = bulk_translate(batch)
             translation_cache.update(new_results)
             save_cache_local(translation_cache)
-            print(f"    Progress: {min(i + batch_size, len(sentences_to_translate))}/{len(sentences_to_translate)} sentences cached.")
+            print(
+                f"    Progress: {min(i + batch_size, len(sentences_to_translate))}/{len(sentences_to_translate)} sentences cached.")
 
-    print("Generating Notes & Screenshots...")
+    print("Generating Notes, Screenshots, and Audio...")
     sorted_vocab = [w for w, c in counts.most_common() if c >= 2]
     known_words = set()
     vocab_notes_list = []
@@ -707,15 +779,26 @@ def process_single_show(show):
             clean_ts = info['timestamp'].replace(':', '_').replace(',', '_').replace('.', '_')
             clean_ep = os.path.basename(info['video']).split('.')[0]
             img_filename = f"{clean_ep}_{clean_ts}.jpg"
-
-            # 1. The path where the file actually lives on your disk
             full_local_path = os.path.join(MEDIA_DIR, show, img_filename)
 
             if extract_screenshot(info['video'], info['timestamp'], img_filename, show):
-                # 2. Anki ONLY wants the filename in the <img> tag
                 image_field = f'<img src="{img_filename}">'
-                # 3. Genanki needs the FULL path to the file to package it
                 media_files_to_package.append(full_local_path)
+
+        # --- AUDIO GENERATION LOGIC ---
+        # 1. Generate Word Audio
+        word_hash = hashlib.sha256(word.encode()).hexdigest()[:8]
+        word_audio_path, word_audio_field = generate_audio_file(word, f"{show}_word_{word_hash}", show)
+        if word_audio_path: media_files_to_package.append(word_audio_path)
+
+        # 2. Generate Sentence Audio
+        sent_audio_field = ""
+        clean_sentence_text = info['raw']
+        if clean_sentence_text:
+            sent_hash = hashlib.sha256(clean_sentence_text.encode()).hexdigest()[:8]
+            sent_audio_path, sent_audio_field = generate_audio_file(clean_sentence_text, f"{show}_sent_{sent_hash}",
+                                                                    show)
+            if sent_audio_path: media_files_to_package.append(sent_audio_path)
 
         sentence_tokens_list = info.get('tokens', [])
         unknown_count = 0
@@ -724,14 +807,17 @@ def process_single_show(show):
                 unknown_count += 1
         sentence_len = len(info['raw'])
         complexity_score = (unknown_count * 100) + sentence_len
-        fields_data = [word, reading, meaning, str(level), str(counts[word]), info['bolded'], trans, ep_list, image_field]
+
+        # Updated Fields List
+        fields_data = [word, reading, meaning, str(level), str(counts[word]), info['bolded'], trans, ep_list,
+                       image_field, word_audio_field, sent_audio_field]
         csv_data.append(fields_data)
 
         if word not in excluded_words:
             vocab_notes_list.append(genanki.Note(model=vocab_model, fields=fields_data))
             sentence_notes_list.append((complexity_score, genanki.Note(model=sentence_model, fields=fields_data)))
         known_words.add(word)
-        if i % 50 == 0:
+        if i % 20 == 0:  # Reduced print freq slightly
             print(f"  > Processed {i}/{len(sorted_vocab)} words...")
 
     print(f"Adding {len(vocab_notes_list)} notes to Vocab Deck...")
@@ -743,12 +829,18 @@ def process_single_show(show):
         sentence_deck.add_note(note)
     print("Creating APKG package...")
     media_files_to_package = list(set(media_files_to_package))
-    genanki.Package([vocab_deck, sentence_deck], media_files=media_files_to_package).write_to_file(f'react-anime/public/anki/{show}_Master.apkg')
+    genanki.Package([vocab_deck, sentence_deck], media_files=media_files_to_package).write_to_file(
+        f'react-anime/public/anki/{show}_Master.apkg')
+
+    # Update CSV Header for new fields
     with open(f'react-anime/public/csv/{show}_Vocabulary_Full.csv', 'w', encoding='utf-8', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(['Expression', 'Reading', 'Meaning', 'Level', 'Frequency', 'Sentence', 'Translation', 'Episodes', 'Image'])
+        writer.writerow(
+            ['Expression', 'Reading', 'Meaning', 'Level', 'Frequency', 'Sentence', 'Translation', 'Episodes', 'Image',
+             'WordAudio', 'SentenceAudio'])
         writer.writerows(csv_data)
-    print(f"Done! Created '{show}_Master.apkg' with {len(media_files_to_package)} screenshots.")
+    print(f"Done! Created '{show}_Master.apkg' with screenshots and audio.")
+
 
 if __name__ == "__main__":
     if not os.path.exists(TRANSCRIPT_DIR):

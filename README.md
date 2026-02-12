@@ -3,7 +3,7 @@
 A Python-powered pipeline to transform anime transcripts into optimized, high-frequency Anki decks. While other tools exist, this project is built for the learner who values full control and offline portability.
 
 # UPDATE UPDATE!!!!!
-There are pictures in the decks now. Every card ~~in every deck~~ in the Lucky Star and Azumanga Daioh deck should have a screenshot of the scene where the example sentence was said in order to give more context.
+There are pictures in the decks now. Every card ~~in every deck~~ in the Lucky Star, Azumanga Daioh, Watamote, Nichijou, and Bakugan decks should have a screenshot of the scene where the example sentence was said in order to give more context.
 
 ## Features
 
@@ -24,7 +24,7 @@ There are pictures in the decks now. Every card ~~in every deck~~ in the Lucky S
 
 ### Q: How long would it take for me to make my own deck
 
-**A:** Give or take ~~an hour~~ like 7 minutes. There are a lot of words in these shows.
+**A:** Give or take an hour. There are a lot of words in these shows and now with the audio generation and screenshots it takes a while
 
 ### Q: What's the point then?
 
