@@ -547,17 +547,28 @@ HOVER_CSS = """
 .expression { font-size: 50px; cursor: pointer; position: relative; display: inline-block; font-weight: bold; }
 .expression .reading-hover { visibility: hidden; font-size: 20px; color: #7f8c8d; position: absolute; width: 100%; top: -25px; left: 0; }
 .expression:hover .reading-hover { visibility: visible; }
+
+/* Dark Mode adjustment for Hover Reading */
+.nightMode .expression .reading-hover { color: #aab7b8; }
 """
 
 STYLE_VOCAB = """
-.card { font-family: "Noto Sans JP", "Hiragino Kaku Gothic Pro", "Meiryo", sans-serif; text-align: center; background-color: #fdfdfd; padding: 20px; }
+/* Base Light Mode Styles */
+.card { font-family: "Noto Sans JP", "Hiragino Kaku Gothic Pro", "Meiryo", sans-serif; text-align: center; background-color: #fdfdfd; padding: 20px; color: #333; }
 .level { display: inline-block; padding: 2px 10px; border-radius: 5px; background: #3498db; color: white; font-size: 16px; margin-top: 10px; }
 .meaning { text-align: left; margin-top: 20px; font-size: 18px; border-top: 1px solid #ccc; padding-top: 10px; }
-.sentence { margin-top: 20px; font-style: italic; background: #eee; padding: 10px; border-radius: 5px; font-size: 22px; }
+.sentence { margin-top: 20px; font-style: italic; background: #eee; padding: 10px; border-radius: 5px; font-size: 22px; color: #2c3e50; }
 .translation { font-size: 16px; color: #7f8c8d; margin-top: 5px; }
 .screenshot { margin-top: 15px; }
 .screenshot img { max-width: 100%; height: auto; border-radius: 5px; }
 .footer { font-size: 12px; color: #bdc3c7; margin-top: 15px; border-top: 1px dashed #ccc; padding-top: 5px; }
+
+/* Dark Mode Overrides */
+.nightMode.card { background-color: #2c2c2c; color: #fdfdfd; }
+.nightMode .meaning { border-top: 1px solid #555; }
+.nightMode .sentence { background: #3d3d3d; color: #ecf0f1; }
+.nightMode .translation { color: #bdc3c7; }
+.nightMode .footer { color: #7f8c8d; border-top: 1px dashed #555; }
 """ + HOVER_CSS
 
 
@@ -600,9 +611,9 @@ def process_single_show(show):
         templates=[{
             'name': 'Vocab Card',
             # Added {{WordAudio}} to Front
-            'qfmt': '<div class="expression"><span class="reading-hover">{{Reading}}</span>{{Expression}}</div><br>{{WordAudio}}<br><div class="level">{{Level}}</div>',
+            'qfmt': '<div class="expression"><span class="reading-hover">{{Reading}}</span>{{Expression}}</div><br><div class="level">{{Level}}</div>',
             # Added {{SentenceAudio}} to Back
-            'afmt': '{{FrontSide}}<hr id="answer"><div class="meaning">{{Meaning}}</div><div class="sentence">{{Sentence}}<br>{{SentenceAudio}}</div><div class="translation">{{Translation}}</div><div class="screenshot">{{Image}}</div><div class="footer">Found in: {{Episodes}} | Count: {{Frequency}}x</div>'
+            'afmt': '{{FrontSide}}<br>{{WordAudio}}<hr id="answer"><div class="meaning">{{Meaning}}</div><div class="sentence">{{Sentence}}<br>{{SentenceAudio}}</div><div class="translation">{{Translation}}</div><div class="screenshot">{{Image}}</div><div class="footer">Found in: {{Episodes}} | Count: {{Frequency}}x</div>'
         }], css=STYLE_VOCAB
     )
 

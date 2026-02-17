@@ -6,9 +6,9 @@ import json
 from collections import Counter
 
 # --- SETTINGS ---
-csv_folder = "csv/"
+csv_folder = "react-anime/public/csv/"
 core_folder = "core lists/"  # Ensure your .json files are here
-output_folder = "graphs/"
+output_folder = "react-anime/public/graphs/"
 plt.rcParams['font.family'] = 'MS Gothic'  # Support for Japanese characters
 
 if not os.path.exists(output_folder):

@@ -4,9 +4,9 @@ export default function Sidebar({topAnime}) {
   return (
     <aside>
         <nav>
-            <h3>Top Anime</h3>
+            <h3>Easiest Anime</h3>
             {topAnime.map(anime =>(
-                <a href='#' target='_blank' key={anime.Anime} rel="noreferrer">
+                <a href={`anki/${anime.Anime}_Master.apkg`} target='_blank' key={anime.Anime} rel="noreferrer">
                     {anime.Anime}
                 </a>
             ))}

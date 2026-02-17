@@ -16,8 +16,7 @@ function App() {
 
   useEffect(() => {
     const sortedTop = [...allDataArray]
-      .sort((a, b) => (b.Perceived_Difficulty_Weighted || 0) - (a.Perceived_Difficulty_Weighted || 0))
-      .slice(0, 5);
+      .sort((a, b) => (a.Average_Difficulty_Unweighted || 0) - (b.Average_Difficulty_Unweighted || 0));
     setTopAnime(sortedTop);
   }, []);
 
@@ -59,6 +58,7 @@ function App() {
                   <p><strong>No-List Words:</strong> {selectedAnime.Real_Life_Japanese.toLocaleString()}</p>
                   <p><strong>Unique Kanji:</strong> {selectedAnime.Unique_kanji}</p>
                   <p><strong>Average Difficulty:</strong> {selectedAnime.Perceived_Difficulty_Weighted}</p>
+                  <p><strong>Peak Difficulty:</strong> {selectedAnime.Peak_difficulty_90th_percentile}</p>
                   
                   <a 
                     href={`anki/${selectedAnime.Anime}_Master.apkg`} 
